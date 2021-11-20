@@ -23,6 +23,9 @@
     <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="process_ecg_archive.py">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="filter.py">
       <SubType>Code</SubType>
     </Compile>
