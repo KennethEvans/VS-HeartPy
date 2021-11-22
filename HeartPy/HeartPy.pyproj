@@ -4,7 +4,7 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>5d688185-dd0e-4112-ae14-ad5879a23f72</ProjectGuid>
     <ProjectHome>.</ProjectHome>
-    <StartupFile>process_ecg.py</StartupFile>
+    <StartupFile>butterworth.py</StartupFile>
     <SearchPath>
     </SearchPath>
     <WorkingDirectory>.</WorkingDirectory>
@@ -13,6 +13,7 @@
     <RootNamespace>HeartPy</RootNamespace>
     <InterpreterId>MSBuild|env|$(MSBuildProjectFullPath)</InterpreterId>
     <SuppressConfigureTestFrameworkPrompt>true</SuppressConfigureTestFrameworkPrompt>
+    <SuppressPackageInstallationPrompt>True</SuppressPackageInstallationPrompt>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
     <DebugSymbols>true</DebugSymbols>
@@ -61,7 +62,6 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="data\ecg_data.csv" />
-    <Content Include="requirements.txt" />
   </ItemGroup>
   <ItemGroup>
     <Interpreter Include="env\">

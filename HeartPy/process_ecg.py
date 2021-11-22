@@ -80,8 +80,44 @@ def plot_all(ecg, bandpass, deriv, square, avg, score, title='ECG'):
     plt.show()
 
 def plot_2_values(ecg, timevals, vals1, vals2=None, label1='1', label2='2',
-        title='ECG Filtering Results', use_time_vals=True,
-        xlim=None):
+        title='ECG Filtering Results', use_time_vals=True, xlim=None):
+    '''Plots 2 or optionally 3 sets of data using the same x values.
+    
+        Parameters
+        ----------
+        ecg : list of float
+            The first set of data.
+    
+        timevals : list of float
+            The x values corresponding to time.
+    
+        vals1 : list of float
+            The second set of data. May be None
+    
+        vals2 : list of float
+            The third set of data. May be None
+            default: None
+    
+        label1 : str
+            Label for second set of data. (first is 'ECG'.)
+            default: '1'
+    
+        label2 : str
+            Label for third set of data.
+            default: '2'
+    
+        title : str
+            Title for the plot.
+            default: 'ECG Filtering Results'
+
+        use_time_vals : boolean
+            Whether to use sample number or the given time values.
+            default: True
+
+        xlim : list of two float values for the start and end of the x axis.
+            Sets the x axis limits.
+            default: None
+     '''
     plt.figure(figsize=(12,7))
     if  not timevals: use_time_vals = False
     if use_time_vals == False:
@@ -106,6 +142,21 @@ def plot_2_values(ecg, timevals, vals1, vals2=None, label1='1', label2='2',
     #plt.ylabel('mV')
     plt.legend(loc=4, framealpha=0.6)
     plt.show()
+
+def shift_score(score, shift):
+    ''' Shifts a list shift places to the right or left depending on the sign
+    of shift.
+    '''
+    shifted = score.copy()
+    if shift >= 0:
+        for i in range(shift):
+            shifted.pop()
+            shifted.insert(0, shifted[0])
+    else:
+        for i in range(-shift):
+            shifted.pop(0)
+            shifted.append(shifted[-1])
+    return shifted
 
 def run_process_after():
     ecg, headers = ut.read_ecg_file(filename)
@@ -169,9 +220,6 @@ def run_process_after():
        new = flt.score(data[i], threshold)
        score.append(new)
 
-    ## Remove low frequency
-    #avg = avg - np.mean(avg)
-
     # FFT
     if False:
         plot_fft(ecg, FS, filename = filename)
@@ -198,8 +246,19 @@ def run_process_after():
         vals2 = np.ndarray.tolist(np.array(avg) * 10.)
         label2 = 'Average x 10'
 
-    #plot_2_values(ecg, cur_x, vals1, vals2, label1=label1, label2=label2, title=title,
-    #    use_time_vals=True, xlim=[0, PLOT_WIDTH_SEC])
+    # Plot the first PLOT_WIDTH_SEC
+    if False:
+        plot_2_values(ecg, cur_x, vals1, vals2, label1=label1, label2=label2,
+            title=title, use_time_vals=True, xlim=[0, PLOT_WIDTH_SEC])
+
+    # Plot with score shifted
+    if True:
+        shift = -17
+        shifted = shift_score
+        plot_2_values(ecg, cur_x, vals1, shifted, label1=label1,
+            label2=f"score shifted by {shift}", title=title, use_time_vals=True)
+
+    # Normal plot
     plot_2_values(ecg, cur_x, vals1, vals2, label1=label1, label2=label2, title=title,
         use_time_vals=True)
 
@@ -304,16 +363,40 @@ def run_real_time():
     #label1 = 'Square'
     #vals1 = square
     #label1 = 'Score'
-    vals1 = np.ndarray.tolist(np.array(avg) * 10.)
-    label1 = 'Average x 10'
-    vals2 = score
-    label2 = 'Score'
-    #plot_2_values(ecg, cur_x, vals1, vals2, label1=label1, label2=label2, title=title,
-    #    use_time_vals=True, xlim=[0, PLOT_WIDTH_SEC])
-    plot_2_values(ecg, cur_x, vals1, vals2, label1=label1, label2=label2, title=title,
-        use_time_vals=True)
 
-    plot_all(ecg, bandpass, deriv, square, avg, score, title=title)
+    if True:
+        vals1 = np.ndarray.tolist(np.array(avg) * 10.)
+        label1 = 'Average x 10'
+        vals2 = score
+        label2 = 'Score'
+    else:
+        # DEBUG
+        vals1 = square
+        label1 = 'Square'
+        vals2 = np.ndarray.tolist(np.array(avg) * 10.)
+        label2 = 'Average x 10'
+
+    # Plot with specified x axis
+    if False:
+        plot_2_values(ecg, cur_x, vals1, vals2, label1=label1, label2=label2,
+            title=title, use_time_vals=True, xlim=[0, PLOT_WIDTH_SEC])
+
+    # Plot with score shifted
+    if True:
+        shift = -18
+        shifted = shift_score(score, shift)
+        label2 = f"Score shifted by {shift}"
+        plot_2_values(ecg, cur_x, vals1, shifted, label1=label1,
+            label2=label2, title=title, use_time_vals=True)
+
+    # Normal plot
+    if True:
+        plot_2_values(ecg, cur_x, vals1, vals2, label1=label1, label2=label2,
+            title=title, use_time_vals=True)
+
+    # Plot all filter steps
+    if True:
+        plot_all(ecg, bandpass, deriv, square, avg, score, title=title)
 
 def main():
     global filename
@@ -334,7 +417,7 @@ def main():
     #test()
     #test2()
 
-    if True:
+    if False:
         # Processing as we go
         run_process_after()
     if True:

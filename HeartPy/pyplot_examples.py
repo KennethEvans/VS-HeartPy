@@ -58,8 +58,8 @@ def axes_demo():
     plt.show()
 
 def main():
-    #show_markers()
-    axes_demo()
+    show_markers()
+    #axes_demo()
 
 if __name__ == "__main__":
     main()
