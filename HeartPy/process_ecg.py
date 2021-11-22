@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib.animation as animation
 from scipy.fft import fft, fftfreq
+import sys
 import os
 import time
 from collections.abc import Iterable
@@ -29,6 +30,21 @@ DATA_WINDOW = 20
 MOV_AVG_WINDOW = 20
 # Set whether to be fast (blit=True) with no x ticks or blit=False and slow
 FAST = True
+
+def plot_peaks(ecg, ecg_x, peak_indices, title='Detected Peaks', filename=None):
+    peak_vals = [ecg[i] for i in peak_indices]
+    peak_x = [ecg_x[i] for i in peak_indices]
+    plt.figure(figsize=(10,6))
+    #plt.subplots_adjust(top=0.8)
+    plt.plot(ecg_x, ecg)
+    plt.plot(peak_x, peak_vals, "ro")
+    title_used = f"{title} ({len(peak_indices)} Peaks)"
+    if filename:
+        title_used += f"\n{filename}"
+    plt.title(title_used)
+    plt.xlabel('time, sec')
+    plt.tight_layout()
+    plt.show()
 
 def plot_fft(data, fs, title = 'FFT', filename=None):
     if filename:
@@ -180,7 +196,7 @@ def run_process_after():
     cur_ecg = []
     cur_filt = []
     filter = []
-    cur_x = []
+    cur_x = [i / FS for i in range(necg)]
 
     # Butterworth
     a = flt.A_BUTTERWORTH3
@@ -293,62 +309,121 @@ def run_real_time():
     cur_avg=[]
     cur_score=[]
     cur_ecg = []
-    cur_x = []
-    
+
+    #Scoring
+    score_offset = 18 # This is the group delay, used for searching ecg for maxima
+    peaks = []
+    peak_indices = []
+    max_avg = []
+    max_avg_indices = []
+    scoring = False
+    score_start = 0
+    score_end = 0
+    max_index = -1
+
+    # Create an extended array with zeros in the last score_offset places
+    ecg_ext = ecg.copy() + [0.0] * score_offset
+    necgext = len(ecg_ext)
+    x_ecg = [i / FS for i in range(necg)]
+    cur_x = [i / FS for i in range(necgext)]
+   
     keep = DATA_WINDOW # Keep this many items
 
     # Loop over ECG values
-    for i in range(0, necg):
-       if len(cur_ecg) == keep:
+    for i in range(0, necgext):
+        if len(cur_ecg) == keep:
             cur_ecg.pop(0)
-       cur_ecg.append(ecg[i])
-       #print(f"{i} {len(cur_ecg)=}")
+        cur_ecg.append(ecg_ext[i])
+        #print(f"{i} {len(cur_ecg)=}")
 
-       # Butterworth
-       input = cur_ecg
-       if len(cur_butterworth) == keep:
-            cur_butterworth.pop(0)
-       cur_butterworth.append(0) # Doesn't matter
-       new = flt.butterworth3(input, cur_butterworth)
-       cur_butterworth[-1] = new
-       bandpass.append(new)
+        # Butterworth
+        input = cur_ecg
+        if len(cur_butterworth) == keep:
+             cur_butterworth.pop(0)
+        cur_butterworth.append(0) # Doesn't matter
+        new = flt.butterworth3(input, cur_butterworth)
+        cur_butterworth[-1] = new
+        bandpass.append(new)
 
-       # Derivative
-       input = cur_butterworth
-       if len(cur_deriv) == keep:
-            cur_deriv.pop(0)
-       cur_deriv.append(0) # Doesn't matter
-       new = flt.derivative(input, cur_deriv)
-       cur_deriv[-1] = new
-       deriv.append(new)
+        # Derivative
+        input = cur_butterworth
+        if len(cur_deriv) == keep:
+             cur_deriv.pop(0)
+        cur_deriv.append(0) # Doesn't matter
+        new = flt.derivative(input, cur_deriv)
+        cur_deriv[-1] = new
+        deriv.append(new)
 
-       # Square
-       input = cur_deriv
-       if len(cur_square) == keep:
-            cur_square.pop(0)
-       cur_square.append(0) # Doesn't matter
-       new = flt.square(input, cur_square)
-       cur_square[-1] = new
-       square.append(new)
+        # Square
+        input = cur_deriv
+        if len(cur_square) == keep:
+             cur_square.pop(0)
+        cur_square.append(0) # Doesn't matter
+        new = flt.square(input, cur_square)
+        cur_square[-1] = new
+        square.append(new)
 
-       # Moving average
-       input = cur_square
-       if len(cur_avg) == keep:
-            cur_avg.pop(0)
-       cur_avg.append(0) # Doesn't matter
-       new = flt.moving_average1(input, MOV_AVG_WINDOW)
-       cur_avg[-1] = new
-       avg.append(new)
-       #print(f"{i} avg = {avg[0:5]}")
+        # Moving average
+        input = cur_square
+        if len(cur_avg) == keep:
+             cur_avg.pop(0)
+        cur_avg.append(0) # Doesn't matter
+        new = flt.moving_average1(input, MOV_AVG_WINDOW)
+        cur_avg[-1] = new
+        avg.append(new)
 
-       # Score
-       input = cur_avg
-       threshold = .01
-       new = flt.score(input[-1], threshold)
-       score.append(new)
+        # Score
+        input = cur_avg
+        threshold = .01
+        new = flt.score(input[-1], threshold)
+        score.append(new)
+        # Process finding the peaks
+        if i == 0:
+            score_start = score_stop = -1
+            if new == 1:
+                score_start = i
+                scoring = True
+        elif i == necgext - 1:
+            if scoring:
+                score_end = i
+                scoring = False
+        else:
+            last = score[i - 1]
+            if scoring and new == 0:
+                score_stop = i
+                scoring = False
+            if  not scoring and new == 1:
+                score_start = i
+                scoring = True
+        if not scoring and score_stop == i:
+            # End of interval, process the score
+            if max_index > -1:
+                peaks.append(ecg_ext[max_index])
+                peak_indices.append(max_index)
+            max_index = -1
+        if scoring:
+            if score_start == i:
+                # Start of interval, set up scoring
+                if i >= score_offset:
+                    max_index = i - score_offset
+                    max_ecg = ecg_ext[i - score_offset]
+                else:
+                    max_ecg = -sys.float_info.max
+                    max_index = -1
+            else:
+                # In interval, accumulate data
+                if i >= score_offset:
+                    if ecg_ext[i - score_offset] > max_ecg:
+                        max_ecg = ecg_ext[i - score_offset]
+                        max_index = i - score_offset
 
-    ## Remove low frequency
-    #avg = avg - np.mean(avg)
+    # Plot peaks
+    if True:
+        if description:
+            peak_filename = f"{filename}\n{description}"
+        else:
+            peak_filename = filename;
+        plot_peaks(ecg, x_ecg, peak_indices, filename=peak_filename)
 
     # FFT
     if False:
@@ -377,8 +452,8 @@ def run_real_time():
         label2 = 'Average x 10'
 
     # Plot with specified x axis
-    if False:
-        plot_2_values(ecg, cur_x, vals1, vals2, label1=label1, label2=label2,
+    if True:
+        plot_2_values(ecg_ext, cur_x, vals1, vals2, label1=label1, label2=label2,
             title=title, use_time_vals=True, xlim=[0, PLOT_WIDTH_SEC])
 
     # Plot with score shifted
@@ -386,17 +461,17 @@ def run_real_time():
         shift = -18
         shifted = shift_score(score, shift)
         label2 = f"Score shifted by {shift}"
-        plot_2_values(ecg, cur_x, vals1, shifted, label1=label1,
+        plot_2_values(ecg_ext, cur_x, vals1, shifted, label1=label1,
             label2=label2, title=title, use_time_vals=True)
 
     # Normal plot
     if True:
-        plot_2_values(ecg, cur_x, vals1, vals2, label1=label1, label2=label2,
+        plot_2_values(ecg_ext, cur_x, vals1, vals2, label1=label1, label2=label2,
             title=title, use_time_vals=True)
 
     # Plot all filter steps
     if True:
-        plot_all(ecg, bandpass, deriv, square, avg, score, title=title)
+        plot_all(ecg_ext, bandpass, deriv, square, avg, score, title=title)
 
 def main():
     global filename
@@ -418,7 +493,7 @@ def main():
     #test2()
 
     if False:
-        # Processing as we go
+        # Processing entire file
         run_process_after()
     if True:
         # Processing as we go

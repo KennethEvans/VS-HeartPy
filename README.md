@@ -12,4 +12,4 @@ HeartPy (<https://github.com/paulvangentcom/heartrate_analysis_python>) is an op
 
 A Pan Thompkins (<https://en.wikipedia.org/wiki/Pan%E2%80%93Tompkins_algorithm> and <https://courses.cs.washington.edu/courses/cse474/18wi/labs/l8/QRSdetection.pdf>) algorithm has been considered. These authors have done a better job of explaining their implementation than most, but there is still a lot that needs to be figured out. One issue is that this algorithm was designed for 200 Hz, so the low and high-pass filter coefficients are not right for 130 Hz. It was also designed to be coded in assembly language using integer arithmetic. A newer Android application should not be restricted this way.
 
-It should be noted that scipy.signal.find_peaks does seem to find the irregular peaks well. It is designed for post-processing the entire file, however.
+It should be noted that scipy.signal.find_peaks does seem to find the irregular peaks resonably well, but not perfectly for an irregular heartbeat. It is also designed for post-processing the entire file.

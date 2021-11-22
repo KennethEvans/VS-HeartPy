@@ -9,7 +9,7 @@ from scipy.signal import find_peaks
 import utils as ut
 import os.path as path
 
-def test(x, height_fract = 0, title='Peak Detection Using Scipy.signal'):
+def plot_peaks(x, height_fract = 0, title='Peak Detection Using Scipy.signal'):
     #x = electrocardiogram()[2000:4000]
     max = np.max(x)
     height = height_fract * max
@@ -29,11 +29,20 @@ def test(x, height_fract = 0, title='Peak Detection Using Scipy.signal'):
 
 def run():
     print(path.basename(path.normpath(__file__)))
-    filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2021-02-04_11-08.csv'
+    # Working on computer HR=55
+    #filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2021-10-31_15-27.csv'
+    # Walking Falison HR=114
+    #filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2021-10-14_16-22.csv'
+    # Walking Blueberry Lake HR=120
+    #filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2021-10-19_15-30.csv'
+    # Feb 4 Example New Low Heartrate HR=63
+    #filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2021-02-04_11-08.csv'
+    # Feb 6 Walking
+    filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2021-02-06_13-52.csv'
     print(filename)
     ecg, headers = ut.read_ecg_file(filename)
 
-    test(ecg, height_fract=.4, title='Peak Detection Using Scipy.signal\n' + filename)
+    plot_peaks(ecg, height_fract=.4, title='Peak Detection Using Scipy.signal\n' + filename)
 
 if __name__ == "__main__":
     run()
