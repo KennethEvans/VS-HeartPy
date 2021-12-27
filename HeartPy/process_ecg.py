@@ -15,8 +15,9 @@ import time
 from collections.abc import Iterable
 import utils as ut
 import filter as flt
+from filter import Moving_Average
 
-# Sampling rate. These algorithme are based on this particular sampling rate.
+# Sampling rate.  These algorithms are based on this particular sampling rate.
 FS = 130.0
 # Width of plot to show
 PLOT_WIDTH_SEC = 3
@@ -24,12 +25,17 @@ PLOT_WIDTH_SAMPLES = 3 * FS
 PLOT_WIDTH_MARGIN = .1
 # Number of mV to show
 PLOT_HEIGHT_MV = 2
-# Data window size. Must be large enough for maximum number of coefficients.
+# Data window size.  Must be large enough for maximum number of coefficients.
 DATA_WINDOW = 20
 # Moving average window size.
 MOV_AVG_WINDOW = 20
-# Set whether to be fast (blit=True) with no x ticks or blit=False and slow
-FAST = True
+# Moving average height window size
+MOV_AVG_HEIGHT_WINDOW = 5
+# Moving average height default
+MOV_AVG_HEIGHT_DEFAULT = .025
+# Moving average height threshold factor
+#     Note: threshold = MOV_AVG_HEIGHT_THRESHOLD_FACTOR * Moving_average.avg()
+MOV_AVG_HEIGHT_THRESHOLD_FACTOR = .4
 
 def plot_peaks(ecg, ecg_x, peak_indices, title='Detected Peaks', filename=None):
     peak_vals = [ecg[i] for i in peak_indices]
@@ -46,7 +52,59 @@ def plot_peaks(ecg, ecg_x, peak_indices, title='Detected Peaks', filename=None):
     plt.tight_layout()
     plt.show()
 
-def plot_fft(data, fs, title = 'FFT', filename=None):
+def calculate_rr(x_ecg, peak_indices, window=5):
+    rr = []
+    rr_inv = []
+    x_rr = []
+    for i in range(len(peak_indices)):
+        if i == 0:
+            rr.append(float("NaN"))
+            rr_inv.append(0.)
+            x_rr.append(x_ecg[peak_indices[i]])
+            continue
+        delta = x_ecg[peak_indices[i]] - x_ecg[peak_indices[i - 1]]
+        rr.append(delta * 1000.)
+        rr_inv.append(60. / delta)
+        x_rr.append(x_ecg[peak_indices[i]])
+        #print(f'{rr[i]=} {x_ecg[i]=} {x_rr[i]=}')
+    hr = flt.moving_average_uniform_filter(rr_inv, window)
+    # Mask out the first window values
+    for i in range(window):
+        hr[i] = float("NaN")
+    #print(f'{x_rr=}')
+    #print(f'{rr=}')
+    return rr, hr, x_rr
+
+def plot_rr(x, rr, hr, title='HR and RR Values', window = None, filename=None):
+    lenX = len(x)
+    y_fixed_val = 30
+    y0 = [y_fixed_val] * lenX
+    fig = plt.figure(figsize=(10,6))
+    plt.plot(x, rr, "-ob", label='RR', markersize=4)
+    plt.ylim(bottom=0)
+    plt.ylabel("RR, ms");
+    title_used = f"{title}"
+    if filename:
+        title_used += f"\n{filename}"
+    plt.title(title_used)
+    plt.xlabel('time, sec')
+    # HR on 2nd y axis
+    ax2 = plt.gca().twinx()
+    if window:
+        hr_label = f'HR (avg over {window} peaks)'
+    else:
+        hr_label = 'HR'
+    ax2.plot(x, hr, '-or', label=hr_label, markersize=4)
+    ax2.plot(x, y0, "-sg", label='Peaks', markersize=4)
+    ax2.set_ylabel('HR, bpm');
+    ax2.set_ylim(bottom=0)
+    ax = plt.gca()
+    fig.legend(loc='lower left', framealpha=0.6, bbox_to_anchor=(0,0),
+              bbox_transform=ax.transAxes)
+    plt.tight_layout()
+    plt.show()
+
+def plot_fft(data, fs, title='FFT', filename=None):
     if filename:
       title = f"{title}\n{filename}"
     n = len(data)
@@ -190,9 +248,9 @@ def run_process_after():
     # Set up the plot
     bandpass = []
     deriv = []
-    square= []
-    avg=[]
-    score=[]
+    square = []
+    avg = []
+    score = []
     cur_ecg = []
     cur_filt = []
     filter = []
@@ -230,6 +288,9 @@ def run_process_after():
     print(f"{len(avg)=}")
 
     # Score
+    # TODO Fix this for recalculating moving average height
+    # and starting threshold = .01
+    #     (MOV_AVG_HEIGHT_THRESHOLD_FACTOR * MOV_AVG_HEIGHT_DEFAULT)
     threshold = .015
     data = avg
     for i in range(necg):
@@ -300,14 +361,14 @@ def run_real_time():
     # Set up the plot
     bandpass = []
     deriv = []
-    square= []
-    avg=[]
-    score=[]
+    square = []
+    avg = []
+    score = []
     cur_butterworth = []
     cur_deriv = []
-    cur_square= []
-    cur_avg=[]
-    cur_score=[]
+    cur_square = []
+    cur_avg = []
+    cur_score = []
     cur_ecg = []
 
     #Scoring
@@ -328,6 +389,14 @@ def run_real_time():
     cur_x = [i / FS for i in range(necgext)]
    
     keep = DATA_WINDOW # Keep this many items
+
+    # Keep a moving average of the moving average heights
+    # Initilize it assuming avg peaks are MOV_AVG_HEIGHT_DEFAULT high
+    moving_average_height_list = [MOV_AVG_HEIGHT_DEFAULT] * MOV_AVG_HEIGHT_WINDOW
+    moving_average_height = Moving_Average(MOV_AVG_HEIGHT_WINDOW,
+        moving_average_height_list)
+    threshold = MOV_AVG_HEIGHT_THRESHOLD_FACTOR * moving_average_height.avg()
+    #print(f'Starting {threshold=} {moving_average_height.avg()=}')
 
     # Loop over ECG values
     for i in range(0, necgext):
@@ -374,25 +443,27 @@ def run_real_time():
 
         # Score
         input = cur_avg
-        threshold = .01
+        # Base the threshold on the current average of the moving average heights
+        # input[-1] = cur_avg[-1] = avg[i] is the last value of cur_avg
         new = flt.score(input[-1], threshold)
         score.append(new)
         # Process finding the peaks
         if i == 0:
+            # At the first point of the [extended] data
             score_start = score_stop = -1
             if new == 1:
                 score_start = i
                 scoring = True
         elif i == necgext - 1:
+            # At last point in the [extended] data so stop
             if scoring:
                 score_end = i
                 scoring = False
         else:
-            last = score[i - 1]
             if scoring and new == 0:
                 score_stop = i
                 scoring = False
-            if  not scoring and new == 1:
+            if not scoring and new == 1:
                 score_start = i
                 scoring = True
         if not scoring and score_stop == i:
@@ -400,6 +471,10 @@ def run_real_time():
             if max_index > -1:
                 peaks.append(ecg_ext[max_index])
                 peak_indices.append(max_index)
+                # Recalculate the threshold
+                moving_average_height.add(max_avg_height)
+                threshold = MOV_AVG_HEIGHT_THRESHOLD_FACTOR * moving_average_height.avg()
+                #print(f'{i} New {threshold=} {moving_average_height.avg()=}')
             max_index = -1
         if scoring:
             if score_start == i:
@@ -408,22 +483,31 @@ def run_real_time():
                     max_index = i - score_offset
                     max_ecg = ecg_ext[i - score_offset]
                 else:
-                    max_ecg = -sys.float_info.max
                     max_index = -1
+                    max_ecg = -sys.float_info.max
+                max_avg_height = input[-1]
             else:
                 # In interval, accumulate data
                 if i >= score_offset:
                     if ecg_ext[i - score_offset] > max_ecg:
                         max_ecg = ecg_ext[i - score_offset]
                         max_index = i - score_offset
+                if input[-1] > max_avg_height:
+                    max_avg_height = input[-1]
 
     # Plot peaks
     if True:
         if description:
             peak_filename = f"{filename}\n{description}"
         else:
-            peak_filename = filename;
+            peak_filename = filename
         plot_peaks(ecg, x_ecg, peak_indices, filename=peak_filename)
+
+    # Calculate and plot RR and HR
+    if True:
+        window = 10
+        rr, hr, x_rr = calculate_rr(x_ecg, peak_indices, window=window)
+        plot_rr(x_rr, rr, hr, window=window, filename=peak_filename)
 
     # FFT
     if False:
@@ -439,6 +523,10 @@ def run_real_time():
     #vals1 = square
     #label1 = 'Score'
 
+    plot_analysis = True
+
+    # Debugging
+    #
     if True:
         vals1 = np.ndarray.tolist(np.array(avg) * 10.)
         label1 = 'Average x 10'
@@ -452,12 +540,12 @@ def run_real_time():
         label2 = 'Average x 10'
 
     # Plot with specified x axis
-    if True:
+    if True and plot_analysis:
         plot_2_values(ecg_ext, cur_x, vals1, vals2, label1=label1, label2=label2,
             title=title, use_time_vals=True, xlim=[0, PLOT_WIDTH_SEC])
 
     # Plot with score shifted
-    if True:
+    if True and plot_analysis:
         shift = -18
         shifted = shift_score(score, shift)
         label2 = f"Score shifted by {shift}"
@@ -465,12 +553,12 @@ def run_real_time():
             label2=label2, title=title, use_time_vals=True)
 
     # Normal plot
-    if True:
+    if True and plot_analysis:
         plot_2_values(ecg_ext, cur_x, vals1, vals2, label1=label1, label2=label2,
             title=title, use_time_vals=True)
 
     # Plot all filter steps
-    if True:
+    if True and plot_analysis:
         plot_all(ecg_ext, bandpass, deriv, square, avg, score, title=title)
 
 def main():
@@ -478,16 +566,26 @@ def main():
 
     print(os.path.basename(os.path.normpath(__file__)))
 
-    # Working on computer HR=55
-    #filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2021-10-31_15-27.csv'
-    # Walking Falison HR=114
-    #filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2021-10-14_16-22.csv'
-    # Walking Blueberry Lake HR=120
-    #filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2021-10-19_15-30.csv'
-    # Feb 4 Example New Low Heartrate HR=63
-    #filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2021-02-04_11-08.csv'
-    # Feb 6 Walking
+    file_names = []
+
+    # 0 Working on computer HR=55
+    filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2021-10-31_15-27.csv'
+    file_names.append(filename)
+    # 1 Walking Falison HR=114
+    filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2021-10-14_16-22.csv'
+    file_names.append(filename)
+    # 2 Walking Blueberry Lake HR=120
+    filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2021-10-19_15-30.csv'
+    file_names.append(filename)
+    # 3 Feb 4 Example New Low Heartrate HR=63
+    filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2021-02-04_11-08.csv'
+    file_names.append(filename)
+    # 4 Feb 6 Walking
     filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2021-02-06_13-52.csv'
+    file_names.append(filename)
+
+    # Pick which one to use
+    filename = file_names[0]
 
     #test()
     #test2()

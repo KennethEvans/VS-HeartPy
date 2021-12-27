@@ -289,6 +289,28 @@ def moving_average_uniform_filter(x, winsize):
     n = winsize if len(x) > winsize else len(x)
     return uniform_filter1d(x, size=n)
 
+class Moving_Average(object):
+    '''Class to handle a moving average'''
+    def __init__(self, window, items=[]):
+        self.window = window
+        if type(items) is list:
+            if len(items) <= window:
+                self.items = items
+            else:
+                # Use last window item
+                self.ietms = items[-window]
+        else:
+            self.items = []
+            self.items.append(item);
+
+    def avg(self):
+        return sum(self.items) / len(self.items)
+
+    def add(self, val):
+        self.items.append(val)
+        if len(self.items) > self.window:
+            self.items.pop(0)
+
 def score(value, threshold):
     '''Scores a value to 0 if it is below a threshold or 1 otherwise.
     
@@ -337,8 +359,10 @@ def test_moving_average():
     filtered1 = signal.copy()
     filtered2 = signal.copy()
     filtered3 = signal.copy()
+    filtered4 = signal.copy()
     winsize = 3
     keep = 10 # Keep this many items
+    mov_avg = Moving_Average(winsize)
     for i in range(n):
         if(i < keep):
             filtered1[i] = moving_average1(signal[:i + 1], winsize)
@@ -346,14 +370,17 @@ def test_moving_average():
         else:
             filtered1[i] = moving_average1(signal[i - keep:i + 1], winsize)
             filtered2[i] = moving_average2(signal[i - keep:i + 1], winsize)
+        mov_avg.add(signal[i])
+        filtered4[i] = mov_avg.avg()
     filtered3 = moving_average_uniform_filter(signal, winsize)
     plt.figure(figsize=(10, 6))
     #plt.xlabel('Time (s)')
     #plt.plot(x_data, data, label='ECG Data');
     plt.plot(signal, label='signal')
-    plt.plot(filtered1, label='moving_average1')
-    plt.plot(filtered2, label='moving_average2')
-    plt.plot(filtered3, label='moving_average_uniform_filter')
+    plt.plot(filtered1, label='moving_average1', linestyle='solid')
+    plt.plot(filtered2, label='moving_average2', linestyle='dashed')
+    plt.plot(filtered4, label='moving_average_from_class', linestyle= (0, (5, 10)))
+    plt.plot(filtered3, label=f'moving_average_uniform_filter (no delay)', linestyle='solid')
     #plt.plot(pure - .5 * winsize, filtered1, label='Filtered 1 Adjusted')
     #plt.plot(filtered1 - filtered2, label='1 - 2')
     #plt.plot(filtered1 - filtered3, label='1 - uniform')
