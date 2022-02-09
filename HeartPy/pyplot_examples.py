@@ -57,8 +57,26 @@ def axes_demo():
 
     plt.show()
 
+def show_color_values(color=None):
+    import matplotlib.colors as mcolors
+    mcolors.TABLEAU_COLORS
+    mcolors.XKCD_COLORS
+    mcolors.CSS4_COLORS
+    #Base colors are in RGB so they need to be converted to HEX
+    BASE_COLORS_hex = {name:mcolors.rgb2hex(color) for name,color in mcolors.BASE_COLORS.items()}
+    all_named_colors = {}
+    all_named_colors.update(mcolors.TABLEAU_COLORS)
+    all_named_colors.update(BASE_COLORS_hex)
+    all_named_colors.update(mcolors.CSS4_COLORS)
+    all_named_colors.update(mcolors.XKCD_COLORS)
+    if not color:
+        print(all_named_colors)
+    else:
+        print(all_named_colors[color])
+
 def main():
-    show_markers()
+    #show_markers()
+    show_color_values(color="tab:blue")
     #axes_demo()
 
 if __name__ == "__main__":

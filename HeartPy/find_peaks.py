@@ -40,7 +40,7 @@ def run():
     # Feb 6 Walking
     filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2021-02-06_13-52.csv'
     print(filename)
-    ecg, headers = ut.read_ecg_file(filename)
+    ecg, _, headers = ut.read_ecg_file(filename)
 
     plot_peaks(ecg, height_fract=.4, title='Peak Detection Using Scipy.signal\n' + filename)
 

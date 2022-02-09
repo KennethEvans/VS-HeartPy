@@ -8,7 +8,8 @@ import numpy as np
 from scipy.signal import resample
 import os.path as path
 
-import keheartpy as kehp
+import heartpy_ke as kehp
+import utils as ut
 
 sample_rate = 130
 
@@ -82,22 +83,6 @@ def plot_data_rr_2(data, peaklist, rr_masklist, sample_rate, title):
     plt.title(title)
     plt.legend(loc=4, framealpha=0.6)
     plt.show()
-
-def read_ecg_file(fileName):
-    # This gives an array of lines w/o CR or LF
-    with open(fileName) as fd:
-        lines = fd.read().splitlines()
-    data = []
-    headers = []
-    # Just use lines that are floats
-    for line in lines:
-        try:
-            line.replace('\n', '')
-            val = float(line)
-            data.append(val)
-        except:
-            headers.append(line)
-    return data, headers
 
 def fix_rr(rr_list, rr_masklist, peaklist):
     #print(peaklist)
@@ -205,7 +190,7 @@ def test3():
     #filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2021-10-19_15-30.csv'
     # Feb 4 Example New Low Heartrate HR=63
     filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2021-02-04_11-08.csv'
-    data, headers = read_ecg_file(filename)
+    data, _, headers = ut.read_ecg_file(filename)
     print(filename)
     print('\nHeader Information:')
     for header in headers:

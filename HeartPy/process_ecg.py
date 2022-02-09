@@ -19,12 +19,6 @@ from filter import Moving_Average
 
 # Sampling rate.  These algorithms are based on this particular sampling rate.
 FS = 130.0
-# Width of plot to show
-PLOT_WIDTH_SEC = 3
-PLOT_WIDTH_SAMPLES = 3 * FS
-PLOT_WIDTH_MARGIN = .1
-# Number of mV to show
-PLOT_HEIGHT_MV = 2
 # Data window size.  Must be large enough for maximum number of coefficients.
 DATA_WINDOW = 20
 # Moving average window size.
@@ -36,6 +30,9 @@ MOV_AVG_HEIGHT_DEFAULT = .025
 # Moving average height threshold factor
 #     Note: threshold = MOV_AVG_HEIGHT_THRESHOLD_FACTOR * Moving_average.avg()
 MOV_AVG_HEIGHT_THRESHOLD_FACTOR = .4
+
+# Width of plot to show in zoomed view
+ZOOMED_PLOT_WIDTH_SEC = 3
 
 def plot_peaks(ecg, ecg_x, peak_indices, title='Detected Peaks', filename=None):
     peak_vals = [ecg[i] for i in peak_indices]
@@ -233,7 +230,7 @@ def shift_score(score, shift):
     return shifted
 
 def run_process_after():
-    ecg, headers = ut.read_ecg_file(filename)
+    ecg, _, headers = ut.read_ecg_file(filename)
     necg = len(ecg)
     print(filename)
     print('\nHeader Information:')
@@ -326,7 +323,7 @@ def run_process_after():
     # Plot the first PLOT_WIDTH_SEC
     if False:
         plot_2_values(ecg, cur_x, vals1, vals2, label1=label1, label2=label2,
-            title=title, use_time_vals=True, xlim=[0, PLOT_WIDTH_SEC])
+            title=title, use_time_vals=True, xlim=[0, ZOOMED_PLOT_WIDTH_SEC])
 
     # Plot with score shifted
     if True:
@@ -346,7 +343,7 @@ def run_real_time():
     This version collects cur_bandpass, cur_deriv, etc. separately
     rather than in one cur_filter.
     '''
-    ecg, headers = ut.read_ecg_file(filename)
+    ecg, _, headers = ut.read_ecg_file(filename)
     necg = len(ecg)
     print(filename)
     print('\nHeader Information:')
@@ -391,7 +388,7 @@ def run_real_time():
     keep = DATA_WINDOW # Keep this many items
 
     # Keep a moving average of the moving average heights
-    # Initilize it assuming avg peaks are MOV_AVG_HEIGHT_DEFAULT high
+    # Initialize it assuming avg peaks are MOV_AVG_HEIGHT_DEFAULT high
     moving_average_height_list = [MOV_AVG_HEIGHT_DEFAULT] * MOV_AVG_HEIGHT_WINDOW
     moving_average_height = Moving_Average(MOV_AVG_HEIGHT_WINDOW,
         moving_average_height_list)
@@ -542,7 +539,7 @@ def run_real_time():
     # Plot with specified x axis
     if True and plot_analysis:
         plot_2_values(ecg_ext, cur_x, vals1, vals2, label1=label1, label2=label2,
-            title=title, use_time_vals=True, xlim=[0, PLOT_WIDTH_SEC])
+            title=title, use_time_vals=True, xlim=[0, ZOOMED_PLOT_WIDTH_SEC])
 
     # Plot with score shifted
     if True and plot_analysis:
@@ -563,29 +560,38 @@ def run_real_time():
 
 def main():
     global filename
-
     print(os.path.basename(os.path.normpath(__file__)))
 
-    file_names = []
+     # Set prompt to use default filename or prompt with a FileDialog
+    prompt = True
+    if prompt:
+        file_names = ut.prompt_for_files(title='Choose a Polar CVS file with ECG Data',
+            multiple=False, type='csv')
+        nFiles = len(file_names)
+        if nFiles == 0:
+            print('Canceled')
+            return;
+        filename = file_names[0]
+    else:
+        file_names = []
+        # 0 Working on computer HR=55
+        filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2021-10-31_15-27.csv'
+        file_names.append(filename)
+        # 1 Walking Falison HR=114
+        filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2021-10-14_16-22.csv'
+        file_names.append(filename)
+        # 2 Walking Blueberry Lake HR=120
+        filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2021-10-19_15-30.csv'
+        file_names.append(filename)
+        # 3 Feb 4 Example New Low Heartrate HR=63
+        filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2021-02-04_11-08.csv'
+        file_names.append(filename)
+        # 4 Feb 6 Walking
+        filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2021-02-06_13-52.csv'
+        file_names.append(filename)
 
-    # 0 Working on computer HR=55
-    filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2021-10-31_15-27.csv'
-    file_names.append(filename)
-    # 1 Walking Falison HR=114
-    filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2021-10-14_16-22.csv'
-    file_names.append(filename)
-    # 2 Walking Blueberry Lake HR=120
-    filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2021-10-19_15-30.csv'
-    file_names.append(filename)
-    # 3 Feb 4 Example New Low Heartrate HR=63
-    filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2021-02-04_11-08.csv'
-    file_names.append(filename)
-    # 4 Feb 6 Walking
-    filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2021-02-06_13-52.csv'
-    file_names.append(filename)
-
-    # Pick which one to use
-    filename = file_names[0]
+        # Pick which one to use
+        filename = file_names[0]
 
     #test()
     #test2()

@@ -414,7 +414,7 @@ def get_a0_for_frequency_response(a, b):
 
 def test_butterworth(fs, low_cutoff, high_cutoff, order, filename):
     # Filter ecg file
-    ecg, headers = ut.read_ecg_file(filename)
+    ecg, _, headers = ut.read_ecg_file(filename)
     x = range(0, len(ecg))
     b, a = butter_bandpass(fs, low_cutoff, high_cutoff, order=order)
     filtered = butter_bandpass_filter_data(ecg, fs, low_cutoff, high_cutoff, order=order)
@@ -431,7 +431,7 @@ def test_butterworth(fs, low_cutoff, high_cutoff, order, filename):
 
 def test_butterworth_ke(fs, low_cutoff, high_cutoff, order, filename):
     # Filter ecg file
-    ecg, headers = ut.read_ecg_file(filename)
+    ecg, _, headers = ut.read_ecg_file(filename)
     x= range(0, len(ecg))
     b, a = butter_bandpass(fs, low_cutoff, high_cutoff, order=order)
     filtered = flt.filter_data(a, b, ecg)

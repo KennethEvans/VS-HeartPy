@@ -123,7 +123,7 @@ def run_animate_ion(filename):
         None
     '''
 
-    ecg, headers = ut.read_ecg_file(filename)
+    ecg, _, headers = ut.read_ecg_file(filename)
     description = ut.find_header_description(headers)
     necg = len(ecg)
     print(filename)
@@ -177,7 +177,7 @@ def run_animate_ion(filename):
 def run_animate():
     global ecg, necg, fig, ax, line1, cur_ecg, cur_x, window, nwin 
 
-    ecg, headers = ut.read_ecg_file(filename)
+    ecg, _, headers = ut.read_ecg_file(filename)
     for header in headers:
         print(header)
     description = ut.find_header_description(headers)
@@ -216,7 +216,7 @@ def run_real_time_1():
     '''
     Implementation using cascading filters with one cur_ecg and cur_filter.
     '''
-    ecg, headers = ut.read_ecg_file(filename)
+    ecg, _, headers = ut.read_ecg_file(filename)
     necg = len(ecg)
     print(filename)
     print('\nHeader Information:')

@@ -7,6 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy.signal as sig
 import csv
+import utils as ut
 
 def plot_all(ecg, f1, f2, f3, f4, f5, title='Pan-Tompkins'):
     plt.figure(figsize=(12,7))
@@ -50,22 +51,6 @@ def plot(ecg, timevals, label='Data', title='Pan-Tompkins Algorithm', use_time_v
     #plt.ylabel('mV')
     plt.legend(loc=4, framealpha=0.6)
     plt.show()
-
-def read_ecg_file(fileName):
-    # This gives an array of lines w/o CR or LF
-    with open(fileName) as fd:
-        lines = fd.read().splitlines()
-    data = []
-    headers = []
-    # Just use lines that are floats
-    for line in lines:
-        try:
-            line.replace('\n', '')
-            val = float(line)
-            data.append(val)
-        except:
-            headers.append(line)
-    return data, headers
 
 def read_csv_file(filename):
     data = []
@@ -155,7 +140,7 @@ def run():
     if True:
         # Feb 4 Example New Low Heartrate HR=63
         filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2021-02-04_11-08.csv'
-        ecg, headers = read_ecg_file(filename)
+        ecg, _, headers = ut.read_ecg_file(filename)
 
     else:
         filename = r'data\ecg_data.csv'

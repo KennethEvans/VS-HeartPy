@@ -47,6 +47,9 @@
     <Compile Include="rbhatia46_orig.py">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="session.py">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="simple_animation.py">
       <SubType>Code</SubType>
     </Compile>
