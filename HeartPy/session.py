@@ -8,16 +8,16 @@ import sys
 import os
 import time
 from datetime import datetime
+from datetime import timedelta
 import utils as ut
 from csv import reader
 
-def plot(time1, hr1, rr1, time2, hr2, rr2, subtitle1=None, subtitle2=None):
+def plot(time1, hr1, rr1, time2, hr2, rr2, subtitle1=None, subtitle2=None, shift=1500):
     fig = plt.figure(figsize=(10,6))
 
     minTime = min(time1[0], time2[0])
     maxTime = max(time1[-1], time2[-1])
     duration = (maxTime - minTime).total_seconds() / 60
-
 
     plt.plot(time1, hr1, 'r', label='HR1')
     plt.plot(time2, hr2, color='hotpink', label='HR2')
@@ -25,14 +25,21 @@ def plot(time1, hr1, rr1, time2, hr2, rr2, subtitle1=None, subtitle2=None):
     plt.xlabel('HR, bpm')
     plt.ylim(bottom=0)
     title_used = f'Hr/RR Comparison (Duration={duration:.1f} min)'
+    if shift:
+        title_used += f'\nRR1 offset to {.001* shift:.2f} sec earlier'
     if subtitle1:
         title_used += f"\n{subtitle1}"
     if subtitle2:
         title_used += f"\n{subtitle2}"
     plt.title(title_used)
 
+    # Offset the first RR values by shift
+    timeoff = time1
+    if shift:
+        for i in range(len(time1)):
+            timeoff[i] = time1[i] - timedelta(milliseconds=shift)  
     ax2 = plt.gca().twinx()
-    ax2.plot(time1, rr1, color='b', label='RR1')
+    ax2.plot(timeoff, rr1, color='b', label='RR1')
     ax2.plot(time2, rr2, color='cornflowerblue', label='RR2')
     ax2.set_ylabel('RR, ms')
     ax2.set_ylim(bottom=0)
@@ -56,7 +63,7 @@ def main():
                 print('You must choose exactly two files')
         if nFiles == 0:
             print('Canceled')
-            return;
+            return
         filename1 = file_names[0]
         filename2 = file_names[1]
     else:

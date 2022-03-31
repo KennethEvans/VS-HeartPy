@@ -4,7 +4,7 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>5d688185-dd0e-4112-ae14-ad5879a23f72</ProjectGuid>
     <ProjectHome>.</ProjectHome>
-    <StartupFile>process_ecg.py</StartupFile>
+    <StartupFile>session.py</StartupFile>
     <SearchPath>
     </SearchPath>
     <WorkingDirectory>.</WorkingDirectory>
