@@ -5,6 +5,7 @@ run_real_time() processes the input file using moving windows.
 run_process_after() processes the input file all at once (not real-time).
 '''
 
+from pickle import TRUE
 import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib.animation as animation
@@ -12,6 +13,7 @@ from scipy.fft import fft, fftfreq
 import sys
 import os
 import time
+from datetime import datetime
 from collections.abc import Iterable
 import utils as ut
 import filter as flt
@@ -19,6 +21,9 @@ from filter import Moving_Average
 
 # Sampling rate.  These algorithms are based on this particular sampling rate.
 FS = 130.0
+# Minimum length of score interval
+# Determined from mimumum QRS is .08 to .10 sec
+MAX_QRS_LENGTH = round(.12 * FS)
 # Data window size.  Must be large enough for maximum number of coefficients.
 DATA_WINDOW = 20
 # Moving average window size.
@@ -32,9 +37,10 @@ MOV_AVG_HEIGHT_DEFAULT = .025
 MOV_AVG_HEIGHT_THRESHOLD_FACTOR = .4
 
 # Width of plot to show in zoomed view
-ZOOMED_PLOT_WIDTH_SEC = 3
+ZOOMED_PLOT_WIDTH_SEC = 6
 
-def plot_peaks(ecg, ecg_x, peak_indices, title='Detected Peaks', filename=None):
+def plot_peaks(ecg, ecg_x, peak_indices, title='Detected Peaks', filename=None,
+               xlim = None):
     peak_vals = [ecg[i] for i in peak_indices]
     peak_x = [ecg_x[i] for i in peak_indices]
     plt.figure(figsize=(10,6))
@@ -45,6 +51,8 @@ def plot_peaks(ecg, ecg_x, peak_indices, title='Detected Peaks', filename=None):
     if filename:
         title_used += f"\n{filename}"
     plt.title(title_used)
+    if xlim:
+        plt.gca().set_xlim(xlim[0], xlim[1])
     plt.xlabel('time, sec')
     plt.tight_layout()
     plt.show()
@@ -206,7 +214,7 @@ def plot_2_values(ecg, timevals, vals1, vals2=None, label1='1', label2='2',
             plt.plot(timevals, vals1, label = label1)
         if vals2:
             plt.plot(timevals, vals2, label = label2)
-    if(xlim):
+    if xlim:
         plt.gca().set_xlim(xlim[0], xlim[1])
     plt.title(title)
     #plt.xlabel('time')
@@ -229,7 +237,7 @@ def shift_score(score, shift):
             shifted.append(shifted[-1])
     return shifted
 
-def run_process_after():
+def run_process_after(filename):
     ecg, _, headers = ut.read_ecg_file(filename)
     necg = len(ecg)
     print(filename)
@@ -338,22 +346,13 @@ def run_process_after():
 
     plot_all(ecg, bandpass, deriv, square, avg, score, title=title)
 
-def run_real_time():
+def score_real_time(filename, show_progress = False):
     '''
-    This version collects cur_bandpass, cur_deriv, etc. separately
-    rather than in one cur_filter.
+    This is the scoring part of run_real_time.
+    Returns ecg, x_ecg, peak_indices, headers, avg, score, ecg_ext, cur_x
     '''
     ecg, _, headers = ut.read_ecg_file(filename)
     necg = len(ecg)
-    print(filename)
-    print('\nHeader Information:')
-    for header in headers:
-        print(header)
-    description = ut.find_header_description(headers)
-    if description:
-        title = f'Real Time Processing\n{filename}\n{description}'
-    else:
-        title = f'Real Time Processing\n{filename}'
 
     # Set up the plot
     bandpass = []
@@ -377,9 +376,11 @@ def run_real_time():
     scoring = False
     score_start = 0
     score_end = 0
-    max_index = -1
+    max_index = min_index = -1
 
-    # Create an extended array with zeros in the last score_offset places
+    print_scores = False
+
+   # Create an extended array with zeros in the last score_offset places
     ecg_ext = ecg.copy() + [0.0] * score_offset
     necgext = len(ecg_ext)
     x_ecg = [i / FS for i in range(necg)]
@@ -465,32 +466,74 @@ def run_real_time():
                 scoring = True
         if not scoring and score_stop == i:
             # End of interval, process the score
-            if max_index > -1:
+            score_len = score_stop - score_start
+            delta_rs = 1000000 # Something large
+            if min_index > -1 and max_index > -1:
+                delta_rs = min_index - max_index
+            # Criterion for using this interval as containing a valid QRS complex
+            use_interval = delta_rs >= 0 and delta_rs <= MAX_QRS_LENGTH and\
+               score_len > MAX_QRS_LENGTH / 2
+            if use_interval:
                 peaks.append(ecg_ext[max_index])
                 peak_indices.append(max_index)
                 # Recalculate the threshold
                 moving_average_height.add(max_avg_height)
                 threshold = MOV_AVG_HEIGHT_THRESHOLD_FACTOR * moving_average_height.avg()
                 #print(f'{i} New {threshold=} {moving_average_height.avg()=}')
-            max_index = -1
+            if show_progress:
+                print(f'use_interval, min_index, max_index, delta_rs, '
+                    f'min_ecg, max_ecg, score_len: '
+                    f'{use_interval!s:^5} {min_index:4d} {max_index:4d} '
+                    f'{delta_rs:4d} {min_ecg:6.3f} {max_ecg:6.3f} {score_len:4d}')
+
+            max_index = min_index = -1
         if scoring:
             if score_start == i:
                 # Start of interval, set up scoring
                 if i >= score_offset:
-                    max_index = i - score_offset
-                    max_ecg = ecg_ext[i - score_offset]
+                    max_index = min_index = i - score_offset
+                    max_ecg = min_ecg = ecg_ext[i - score_offset]
                 else:
-                    max_index = -1
+                    max_index = min_index = -1
                     max_ecg = -sys.float_info.max
+                    min_ecg = sys.float_info.max
                 max_avg_height = input[-1]
             else:
                 # In interval, accumulate data
                 if i >= score_offset:
-                    if ecg_ext[i - score_offset] > max_ecg:
-                        max_ecg = ecg_ext[i - score_offset]
+                    last = ecg_ext[i - score_offset]
+                    if last > max_ecg:
+                        max_ecg = last
                         max_index = i - score_offset
+                    if last < min_ecg:
+                        min_ecg = last
+                        min_index = i - score_offset
                 if input[-1] > max_avg_height:
                     max_avg_height = input[-1]
+
+    return ecg, x_ecg, peak_indices, headers, bandpass, deriv, square, avg, score, ecg_ext, cur_x
+
+def run_real_time(filename, show_progress = False, write_csv = False,
+            plot_peaks_zoomed = False,
+            plot_analysis = True, plot_all_filter_steps = False,
+            plot_rr = False):
+    '''
+    This version collects cur_bandpass, cur_deriv, etc. separately
+    rather than in one cur_filter. It handles mostly plotting and printing.
+    The algorithm is run in score_real_time.
+    '''
+    ecg, x_ecg, peak_indices, headers, bandpass, deriv, square, avg, score,\
+       ecg_ext, cur_x = score_real_time(filename, show_progress = show_progress)
+
+    print(filename)
+    print('\nHeader Information:')
+    for header in headers:
+        print(header)
+    description = ut.find_header_description(headers)
+    if description:
+        title = f'Real Time Processing\n{filename}\n{description}'
+    else:
+        title = f'Real Time Processing\n{filename}'
 
     # Plot peaks
     if True:
@@ -500,8 +543,17 @@ def run_real_time():
             peak_filename = filename
         plot_peaks(ecg, x_ecg, peak_indices, filename=peak_filename)
 
+    # Plot peaks zoomed
+    if plot_peaks_zoomed:
+        if description:
+            peak_filename = f"{filename}\n{description}"
+        else:
+            peak_filename = filename
+        plot_peaks(ecg, x_ecg, peak_indices, filename=peak_filename,
+                   xlim=[0, 10])
+
     # Calculate and plot RR and HR
-    if True:
+    if plot_rr:
         window = 10
         rr, hr, x_rr = calculate_rr(x_ecg, peak_indices, window=window)
         plot_rr(x_rr, rr, hr, window=window, filename=peak_filename)
@@ -520,8 +572,6 @@ def run_real_time():
     #vals1 = square
     #label1 = 'Score'
 
-    plot_analysis = True
-
     # Debugging
     #
     if True:
@@ -537,33 +587,83 @@ def run_real_time():
         label2 = 'Average x 10'
 
     # Plot with specified x axis
-    if True and plot_analysis:
-        plot_2_values(ecg_ext, cur_x, vals1, vals2, label1=label1, label2=label2,
+    if plot_analysis:
+        shift = -18
+        shifted = shift_score(score, shift)
+        label2 = f"Score shifted by {shift}"
+        plot_2_values(ecg_ext, cur_x, vals1, shifted, label1=label1, label2=label2,
             title=title, use_time_vals=True, xlim=[0, ZOOMED_PLOT_WIDTH_SEC])
 
     # Plot with score shifted
-    if True and plot_analysis:
+    if plot_analysis:
         shift = -18
         shifted = shift_score(score, shift)
         label2 = f"Score shifted by {shift}"
         plot_2_values(ecg_ext, cur_x, vals1, shifted, label1=label1,
             label2=label2, title=title, use_time_vals=True)
 
-    # Normal plot
-    if True and plot_analysis:
+    # Normal plot with score not shifted
+    if False and plot_analysis:
+        label2 = f"Score not shifted"
         plot_2_values(ecg_ext, cur_x, vals1, vals2, label1=label1, label2=label2,
             title=title, use_time_vals=True)
 
     # Plot all filter steps
-    if True and plot_analysis:
+    if plot_all_filter_steps:
         plot_all(ecg_ext, bandpass, deriv, square, avg, score, title=title)
+
+    # Write the result
+    if write_csv:
+        outfile = r'data\ecg_test_data.csv'
+        now = datetime.now()
+        timestamp = now.strftime('%Y-%m-%d %H:%M:%S')
+        print(f'\nWriting {outfile} at {timestamp}')
+        ut.write_ecg_file(ecg_ext, peak_indices, headers, outfile,
+            simulation_str = f'HeartPy.process_ecg.run_real_time {timestamp}')
+
+def check_real_time(filename, show_progress = False):
+    ''' Runs score_real_time and generates plots to check for how well the
+    algorithm did.
+    '''
+    ecg, x_ecg, peak_indices, headers, bandpass, deriv, square, avg, score,\
+       ecg_ext, cur_x = score_real_time(filename, show_progress = show_progress)
+    print(f'{len(ecg)=} {len(x_ecg)=} {len(peak_indices)=}')
+
+    print(filename)
+    print('\nHeader Information:')
+    for header in headers:
+        print(header)
+    description = ut.find_header_description(headers)
+    if description:
+        title = f'Real Time Processing\n{filename}\n{description}'
+    else:
+        title = f'Real Time Processing\n{filename}'
+
+    # Print results
+    npeaks = ut.find_header_item(headers, 'npeaks')
+    if npeaks:
+        print(f'\nFound {len(peak_indices)} peaks. File had {npeaks} peaks.')
+    else:
+        print(f'\nFound {len(peak_indices)} peaks.')
+
+    # Plot peaks zoomed
+    if True:
+        if description:
+            peak_filename = f"{filename}\n{description}"
+        else:
+            peak_filename = filename
+
+        for i in range(3):
+            plot_peaks(ecg, x_ecg, peak_indices, filename=peak_filename,
+                xlim=[i * 10, i * 10 + 10])
+        
 
 def main():
     global filename
     print(os.path.basename(os.path.normpath(__file__)))
 
      # Set prompt to use default filename or prompt with a FileDialog
-    prompt = True
+    prompt = False
     if prompt:
         file_names = ut.prompt_for_files(title='Choose a Polar CVS file with ECG Data',
             multiple=False, type='csv')
@@ -573,35 +673,49 @@ def main():
             return;
         filename = file_names[0]
     else:
-        file_names = []
         # 0 Working on computer HR=55
-        filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2021-10-31_15-27.csv'
-        file_names.append(filename)
+        #filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2021-10-31_15-27.csv'
         # 1 Walking Falison HR=114
-        filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2021-10-14_16-22.csv'
-        file_names.append(filename)
+        #filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2021-10-14_16-22.csv'
         # 2 Walking Blueberry Lake HR=120
-        filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2021-10-19_15-30.csv'
-        file_names.append(filename)
+        #filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2021-10-19_15-30.csv'
         # 3 Feb 4 Example New Low Heartrate HR=63
-        filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2021-02-04_11-08.csv'
-        file_names.append(filename)
+        #filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2021-02-04_11-08.csv'
         # 4 Feb 6 Walking
-        filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2021-02-06_13-52.csv'
-        file_names.append(filename)
-
-        # Pick which one to use
-        filename = file_names[0]
-
+        #filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2021-02-06_13-52.csv'
+        # After walking. Device, internal HR differ
+        #filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2022-02-20_15-08.csv'
+        # Before walking 2. Device HR changed from 94 to 54
+        #filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2022-02-20_13-51.csv'
+        # Before walking
+        #filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2022-02-20_13-44.csv'
+        # Sitting down. Little out of breath.
+        #filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2022-02-03_18-43.csv'
+        # 2-20-2022 Before walking
+        #filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2022-02-20_13-44.csv'
+        # 2-15-2022-2022
+        #filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2022-02-15_12-58.csv'
+        # 2-18-16 Has extra processed peak
+        #filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2022-02-18_16-06.csv'
+        # 5-13-2022
+        #filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2022-05-13_12-42.csv'
+        # 6-15-18 With new algorithm in KE.Net ECG
+        filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2022-06-15_18-30.csv'
     #test()
     #test2()
 
     if False:
         # Processing entire file
-        run_process_after()
+        run_process_after(filename)
+    if True:
+        # Check the file vs processed peaks
+        print('Running check_real_time')
+        check_real_time(filename, show_progress = False)
     if True:
         # Processing as we go
-        run_real_time()
+        print('Running run_real_time')
+        write_csv = False
+        run_real_time(filename, show_progress = True, write_csv = write_csv)
 
 if __name__ == "__main__":
     main()

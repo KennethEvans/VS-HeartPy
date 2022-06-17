@@ -6,6 +6,12 @@ import os
 from csv import reader
 from datetime import datetime
 
+def timestamp(format = '%Y-%m-%d %H:%M:%S.%f'):
+    '''Generates a timestamp for the current time with the given format
+    '''
+    now = datetime.now()
+    return  now.strftime(format)
+
 def prompt_for_files(title='Choose Files', multiple=False, type='csv'):
     '''Brings up a system dialog to prompt for files of the given type and
     an 'All files (*.*)" files option. You can pick the dialog title, and
@@ -41,7 +47,7 @@ column of peak values, treating lines that are not a float as part of the header
 
     Parameters
     ----------
-    flename : str
+    filename : str
         Name of the file to read
 
     Returns
@@ -69,13 +75,50 @@ column of peak values, treating lines that are not a float as part of the header
             ecgval = float(tokens[0])
             ecg.append(ecgval)
             if len(tokens) > 1:
-                if tokens[1] == 0:
+                if int(tokens[1]) == 0:
                     peaks.append(False)
                 else:
                    peaks.append(True)
         except:
             headers.append(line)
     return ecg, peaks, headers
+
+def get_peak_values(ecg, is_peak):
+    '''Finds the ECG values that are peaks.
+
+    Parameters
+    ----------
+    ecg : list
+        List of ECG values.
+    isPeak : list
+        List of booleans indicating if it is a peak or not.
+
+    Returns
+    -------
+    peaks : list
+        The indices corresponding to ECG peaks.
+    '''
+    peaks = [];
+    for i in range(len(ecg)):
+        if is_peak[i]:
+            peaks.append(i)
+    return peaks
+
+def find_header_item(headers, item):
+    '''Finds the value of the line starting with <item>= in the headers.
+    Returns None if not found. Will only check new header format.
+    '''
+    use_new = False;
+    if len(headers) > 0:
+        if headers[0].startswith("application="):
+            use_new = True;
+    if not use_new:
+       return None
+    for line in headers:
+            # Of the form note=<note>
+            if line.startswith(item + '='):
+                return line[len(item) + 1:]
+    return None
 
 def find_header_description(headers):
     use_new = False;
@@ -134,3 +177,31 @@ def read_session_file(file_name):
                     hr.append(hr_val)
                     rr.append(rr1)
     return time, hr, rr
+
+def write_ecg_file(ecg, peaks, header, filename = r'data\ecg_test_data.csv',
+                   simulation_str='Heart.py'):
+    '''Writes a CSV file with 2 columns, ecg, is_peak. There is a header at the top.
+
+    Parameters
+    ----------
+    ecg : list
+        The ecg values.
+    peaks : list
+        The peak values.
+    headers : list
+        The headers
+    filename : str
+    '''
+    with open(filename, 'w') as f:
+        if simulation_str:
+            f.write(f'simulation={simulation_str}\n')
+        for line in header:
+            f.write(line + '\n')
+        for i in range(len(ecg)):
+            if not peaks is None:
+                try:
+                    if peaks.index(i):
+                        is_peak = 1
+                except:
+                    is_peak = 0
+            f.write(f'{ecg[i]:.3f},{is_peak}\n')
