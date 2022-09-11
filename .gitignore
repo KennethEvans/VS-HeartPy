@@ -6,6 +6,9 @@
 # Project specific
 /HeartPy/env
 
+# Visual Studio History (VSHistory) files
+.vshistory/
+
 # User-specific files
 *.rsuser
 *.suo
@@ -352,10 +355,6 @@ ASALocalRun/
 
 # Local History for Visual Studio
 .localhistory/
-
-# Visual Studio History (VSHistory) files
-.vshistory/
-
 
 # BeatPulse healthcheck temp database
 healthchecksdb

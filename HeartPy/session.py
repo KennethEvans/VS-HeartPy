@@ -22,7 +22,7 @@ def plot(time1, hr1, rr1, time2, hr2, rr2, subtitle1=None, subtitle2=None, shift
     plt.plot(time1, hr1, 'r', label='HR1')
     plt.plot(time2, hr2, color='hotpink', label='HR2')
     plt.xlabel('time, sec')
-    plt.xlabel('HR, bpm')
+    plt.ylabel('HR, bpm')
     plt.ylim(bottom=0)
     title_used = f'Hr/RR Comparison (Duration={duration:.1f} min)'
     if shift:

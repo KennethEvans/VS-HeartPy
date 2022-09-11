@@ -41,9 +41,8 @@ def prompt_for_files(title='Choose Files', multiple=False, type='csv'):
     root.destroy()
     return file_names
 
-def read_ecg_file(fileName):
-    '''Reads an ECG file with one column of ECG values and potentially one
-column of peak values, treating lines that are not a float as part of the header.
+def read_emay_spo2_file(fileName):
+    '''Reads an EMAY CSV file with columns for date, time, Spo2, and PR.
 
     Parameters
     ----------
@@ -52,36 +51,62 @@ column of peak values, treating lines that are not a float as part of the header
 
     Returns
     -------
-    ecg : list
-        The ecg values.
-    peaks : list
-        The peak values.
+    time : list
+        The time values.
+    hr : list of int
+        The hr values.
+    spo2 : list of int
+        The SpO2 values.
     headers : list
         The headers
     '''
     # This gives an array of lines w/o CR or LF
     with open(fileName) as fd:
         lines = fd.read().splitlines()
-    ecg = []
-    peaks = []
-    headers = []
+    time = []
+    hr = []
+    spo2 = []
     # Just use lines that are floats
+    nlines = 0;
     for line in lines:
-        if len(line) == 0:
+        # Skip the header
+        nlines = nlines + 1
+        if nlines == 1:
             continue
         try:
             line.replace('\n', '')
             tokens = line.split(",");
-            ecgval = float(tokens[0])
-            ecg.append(ecgval)
-            if len(tokens) > 1:
-                if int(tokens[1]) == 0:
-                    peaks.append(False)
-                else:
-                   peaks.append(True)
-        except:
-            headers.append(line)
-    return ecg, peaks, headers
+            if len(tokens) != 4:
+                continue
+            # Windows does not handle single-digit month and day
+            mdy = tokens[0].split('/');
+            if len(mdy[0]) == 1:
+                month = f'0{mdy[0]}'
+            else:
+                month = f'{mdy[0]}'
+            if len(mdy[1]) == 1:
+                day = f'0{mdy[1]}'
+            else:
+                day = f'{mdy[1]}'
+            year = f'{mdy[2]}';
+            combinedtime = f'{month}/{day}/{year} {tokens[1]}'
+            timeval = datetime.strptime(combinedtime, '%m/%d/%Y %I:%M:%S %p')
+            time.append(timeval)
+            if len(tokens[2]) == 0:
+                spo2.append(None)
+            else:
+                spo2.append(int(tokens[2]))
+            if len(tokens[3]) == 0:
+                hr.append(None)
+            else:
+                hr.append(int(tokens[3]))
+        except Exception as e:
+            print(e)
+            if nlines < 2:
+                continue
+            else:
+                break
+    return time, spo2, hr
 
 def get_peak_values(ecg, is_peak):
     '''Finds the ECG values that are peaks.
@@ -162,20 +187,31 @@ def read_session_file(file_name):
         # Iterate over each row in the csv using reader object
         for row in csv_reader:
             # row variable is a list that represents a row in csv
+            len_row = len(row)
+            if not row or len_row == 0:
+                continue
             dt = datetime.strptime(row[0], '%Y-%m-%d %H:%M:%S.%f')
-            rr_vals = row[2].split()
+            time.append(dt)
+            if len_row < 2:
+                hr.append(None)
+                rr.append(None)
+                continue
             hr_val = int(row[1])
+            hr.append(hr_val)
+            if len_row < 3:
+                rr.append(None)
+                continue
+            rr_vals = row[2].split()
             if len(rr_vals) == 0:
-                time.append(dt)
-                hr.append(hr_val)
                 rr.append(None)
             else:
                 # TODO make this right
-                for rr_val in rr_vals:
-                    rr1 = int(rr_val)
-                    time.append(dt)
-                    hr.append(hr_val)
-                    rr.append(rr1)
+                if 'Invalid' in rr_vals:
+                    rr.append(None)
+                else:
+                    for rr_val in rr_vals:
+                        rr1 = int(rr_val)
+                        rr.append(rr1)
     return time, hr, rr
 
 def write_ecg_file(ecg, peaks, header, filename = r'data\ecg_test_data.csv',
@@ -205,3 +241,20 @@ def write_ecg_file(ecg, peaks, header, filename = r'data\ecg_test_data.csv',
                 except:
                     is_peak = 0
             f.write(f'{ecg[i]:.3f},{is_peak}\n')
+
+def format_duration(seconds: int):
+    if seconds is not None:
+        seconds = int(seconds)
+        d = seconds // (3600 * 24)
+        h = seconds // 3600 % 24
+        m = seconds % 3600 // 60
+        s = seconds % 3600 % 60
+        if d > 0:
+            return '{:02d}D {:02d}H {:02d}m {:02d}s'.format(d, h, m, s)
+        elif h > 0:
+            return '{:02d}H {:02d}m {:02d}s'.format(h, m, s)
+        elif m > 0:
+            return '{:02d}m {:02d}s'.format(m, s)
+        elif s > 0:
+            return '{:02d}s'.format(s)
+    return '-'
