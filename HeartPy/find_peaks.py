@@ -7,13 +7,11 @@ import matplotlib.pyplot as plt
 from scipy.misc import electrocardiogram
 from scipy.signal import find_peaks
 import utils as ut
-import process_ecg as pr
+import score0 as scale
 import os.path as path
-import glob
-from pathlib import Path
+import glob 
 
-
-def plot_peaks(ecg, peaks = None, height_fract = 0,title='Peak Detection',
+def plot_peaks(ecg, peaks = None, height_fract = 0, title='Peak Detection',
         show_segments = True, show_segments_only = False,
         sample_rate = 130, do_scipy_peaks = True, peaks_proc = None):
     #ecg = electrocardiogram()[2000:4000]
@@ -163,7 +161,7 @@ def check_peak_diffs(search_path = r'C:\Scratch\ECG\Polar ECG\CSV',
             peaks = ut.get_peak_values(ecg, is_peak)
         else:
             peaks = None
-        _, _, peaks_proc, _, _, _, _, _, _, _, _, _, _, _ = pr.score_real_time(file)
+        _, _, peaks_proc, _, _, _, _, _, _, _, _, _, _, _ = scale.score_real_time(file)
         
         npeaks = 0
         if peaks:
@@ -326,6 +324,9 @@ def run():
         #filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2022-05-13_12-42.csv'
         # 6-15-18 With new algorithm in KE.Net ECG
         filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2022-06-15_18-30.csv'
+        # 12-17-2022 Walking Hillside
+        #filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2022-12-17_16-22.csv'
+        #filename = r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2022-12-17_16-16.csv'
 
     print(filename)
     ecg, is_peak, headers = ut.read_ecg_file(filename)
@@ -340,7 +341,7 @@ def run():
         print(f'Number of peaks: 0')
 
     # Get peaks from process.py
-    _, _, peaks_proc, _, _, _, _, _, _ , _, _ = pr.score_real_time(filename)
+    _, _, peaks_proc, _, _, _, _, _, _ , _, _ = scale.score_real_time(filename)
     print(f'Number of processed peaks: {len(peaks_proc)}')
 
     ## Print different indices
@@ -381,9 +382,9 @@ def run():
 
     description = ut.find_header_description(headers)
     if description:
-        title = f'Find Peaks\n{filename}\n{description}'
+        title = f'Find Peaks: {filename}\n{description}'
     else:
-        title = f'Find Peaks\n{filename}'
+        title = f'Find Peaks: {filename}'
 
     plot_peaks(ecg, peaks = peaks, peaks_proc = peaks_proc, height_fract=.4,
               title= title, sample_rate = sample_rate)

@@ -36,7 +36,7 @@ def plot_session(time1, hr1, time2, hr2, filename1=None, filename2=None):
     plt.tight_layout()
     plt.show()
 
-def plot_sp02_hr(time, spo2, hr, subtitle1=None, miny=90):
+def plot_sp02_hr(time, spo2, hr, time2=None, notes=None, subtitle1=None, miny=90):
     interval = (time[-1] - time[0]).total_seconds()
     duration = ut.format_duration(interval)
 
@@ -46,10 +46,18 @@ def plot_sp02_hr(time, spo2, hr, subtitle1=None, miny=90):
     if subtitle1:
         title_used += f"\n{subtitle1}"
     plt.suptitle(title_used)
-
+numpy as np
+import os
     ax1 = plt.subplot(2, 1, 1)
     ax1.set_ylim([90, 100])
     plt.plot(time, spo2, 'cornflowerblue', label='SpO2')
+    # Add annotation
+    if time2  and notes:
+        for i in range(len(time2)):
+            # Scatter the values around 99. Higher index is later time.
+            pos = 99 - i
+            plt.text(time2[i], pos, '  ' + notes[i], verticalalignment="center")
+            plt.plot(time2[i], pos, marker="o", color="black")
 
     plt.xlabel('time')
     plt.ylabel('SpO2, %')
@@ -59,9 +67,67 @@ def plot_sp02_hr(time, spo2, hr, subtitle1=None, miny=90):
     plt.plot(time, hr, color='red', label='HR')
     plt.ylabel('HR, bpm')
     plt.xlabel('time')
+    # Add annotation
+    if time2 and notes:
+        # Can't use sum(hr) and len(hr) if some values are None
+        sum = 0
+        nvals = 0
+        for i in range(len(hr)):
+            if hr[i]:
+                sum = sum + hr[i]
+                nvals = nvals +1
+        if nvals > 0:
+            avg = float(sum) / nvals
+        else:
+            avg =60
+        # Scatter the values around avg. Higher index is later time.
+        for i in range(len(time2)):
+            pos = avg - -4 - 2 * i
+            plt.text(time2[i], pos, '  ' + notes[i], verticalalignment="center")
+            plt.plot(time2[i], pos, marker="o", color="black")
 
     plt.tight_layout()
     plt.show()
+
+def read_event_timer(prompt = False):
+    print(os.path.basename(os.path.normpath(__file__)))
+
+    # Set prompt to use default filename or prompt with a FileDialog
+    if prompt:
+        file_names = ut.prompt_for_files(title='Choose EMAY Oximeter file',
+            multiple=False, type='csv')
+        if file_names and len(file_names) > 0:
+            filename = file_names[0]
+        else:
+            print('Canceled')
+            return
+    else:
+        #filename = r'C:\Scratch\ECG\Android\S22\Current\SpO2\EMAY SpO2-20220908-001532.csv'
+        #filename = r'C:\Scratch\ECG\Android\S22\Current\SpO2\EMAY SpO2-20220910-140911.csv'
+        filename = r'C:\Scratch\ECG\Android\S22\Current\SpO2\EMAY SpO2-20221130-231117.csv'
+
+    # Get the event timer file
+    if prompt:
+        file_names = ut.prompt_for_files(title='Choose Event Timer file',
+            multiple=False, type='csv')
+        if file_names and len(file_names) > 0:
+            filename2 = file_names[0]
+        else:
+            print('Canceled Event Timer file')
+            time2 = None
+            notes = None
+            filename2 = None
+    else:
+        filename2 = r'C:\Scratch\ECG\Android\S22\Current\SpO2\EventTimer-Sleep_Test_Nov_30.csv'
+
+    time, spo2, hr = ut.read_emay_spo2_file(filename)
+    if filename2:
+        time2, notes, headers = ut.read_event_timer_file(filename2)
+    #print(f'{len(time)=} {len(time2)=}')
+    #print(f'{type(time[0])=} {type(time2[0])=}')
+    #for i in range(len(time2)):
+    #    print(time2[i])
+    plot_sp02_hr(time, spo2, hr, time2=time2, notes=notes, subtitle1=filename) 
 
 def read_spo2(prompt = False):
     print(os.path.basename(os.path.normpath(__file__)))
@@ -85,7 +151,7 @@ def read_spo2(prompt = False):
     plot_sp02_hr(time, spo2, hr, subtitle1=filename) 
 
 def read_spo2_session(prompt = False):
-    print(os.path.basename(os.path.normpath(__file__)))
+    ut.print_module_filename(__file__)
 
     # Set prompt to use default filename or prompt with a FileDialog
     if prompt:
@@ -139,8 +205,14 @@ def read_spo2_session(prompt = False):
         filename1=filename1, filename2=filename2)
 
 def run():
+    # Reads multiple Emay session files
     #read_spo2(True)
-    read_spo2_session(False)
+
+    # Reads two session files, Emay or HR
+    #read_spo2_session(True)
+    
+    # Reads one Emay and one Event Timer file (if not canceled)
+    read_event_timer(True)
 
 if __name__ == "__main__":
     run()

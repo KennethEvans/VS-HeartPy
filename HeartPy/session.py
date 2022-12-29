@@ -38,6 +38,7 @@ def plot(time1, hr1, rr1, time2, hr2, rr2, subtitle1=None, subtitle2=None, shift
     if shift:
         for i in range(len(time1)):
             timeoff[i] = time1[i] - timedelta(milliseconds=shift)  
+    print(f'{len(timeoff)=} {len(rr1)=} {len(time2)=} {len(rr2)=}')
     ax2 = plt.gca().twinx()
     ax2.plot(timeoff, rr1, color='b', label='RR1')
     ax2.plot(time2, rr2, color='cornflowerblue', label='RR2')

@@ -4,7 +4,7 @@ Commonly used utility functions for ECG processaing.
 
 import os
 from csv import reader
-from datetime import datetime
+from datetime import datetime, timedelta
 
 def timestamp(format = '%Y-%m-%d %H:%M:%S.%f'):
     '''Generates a timestamp for the current time with the given format
@@ -36,10 +36,101 @@ def prompt_for_files(title='Choose Files', multiple=False, type='csv'):
     else:
         file_names_ret = filedialog.askopenfilename(title=title,
             filetypes=filetypes)
-        if file_names_ret:
+        if file_names_ret and len(file_names_ret) > 0:
             file_names.append(file_names_ret)
     root.destroy()
     return file_names
+
+def read_ecg_file(fileName):
+    '''Reads an ECG file with one column of ECG values and potentially one
+column of peak values, treating lines that are not a float as part of the header.
+
+    Parameters
+    ----------
+    filename : str
+        Name of the file to read
+
+    Returns
+    -------
+    ecg : list
+        The ecg values.
+    peaks : list
+        The peak values.
+    headers : list
+        The headers
+    '''
+    # This gives an array of lines w/o CR or LF
+    with open(fileName) as fd:
+        lines = fd.read().splitlines()
+    ecg = []
+    peaks = []
+    headers = []
+    # Just use lines that are floats
+    for line in lines:
+        if len(line) == 0:
+            continue
+        try:
+            line.replace('\n', '')
+            tokens = line.split(",");
+            ecgval = float(tokens[0])
+            ecg.append(ecgval)
+            if len(tokens) > 1:
+                if int(tokens[1]) == 0:
+                    peaks.append(False)
+                else:
+                   peaks.append(True)
+        except:
+            headers.append(line)
+    return ecg, peaks, headers
+
+def read_event_timer_file(fileName):
+    '''Reads an Event Timer CSV file.
+
+    Parameters
+    ----------
+    filename : str
+        Name of the file to read
+
+    Returns
+    -------
+    time : list of datetiem.datetime
+        The time values.
+    note : list of string
+        The note values.
+    headers : list of string
+        The headers
+    '''
+    # This gives an array of lines w/o CR or LF
+    with open(fileName) as fd:
+        lines = fd.read().splitlines()
+        times = []
+        notes = []
+        headers = []
+        try:
+            # Just use lines that are floats
+            data_found = False
+            for line in lines:
+                if (not data_found):
+                    if line.startswith('time'):
+                        # This is the column names line
+                        data_found = True
+                        continue
+                if (not data_found):
+                    # Header
+                    headers.append(line)
+                else:
+                    # Data
+                    tokens = line.split("\t");
+                    if len(tokens) != 3:
+                        continue
+                    note = tokens[1]
+                    timestamp = float(tokens[2])/1000
+                    timeval = datetime.fromtimestamp(timestamp)
+                    times.append(timeval)
+                    notes.append(note)
+        except Exception as e:
+            print(e)
+    return times, notes, headers
 
 def read_emay_spo2_file(fileName):
     '''Reads an EMAY CSV file with columns for date, time, Spo2, and PR.
@@ -51,7 +142,7 @@ def read_emay_spo2_file(fileName):
 
     Returns
     -------
-    time : list
+    time : list of datetime.datetime
         The time values.
     hr : list of int
         The hr values.
@@ -209,9 +300,18 @@ def read_session_file(file_name):
                 if 'Invalid' in rr_vals:
                     rr.append(None)
                 else:
+                    first = True
                     for rr_val in rr_vals:
                         rr1 = int(rr_val)
-                        rr.append(rr1)
+                        if first:
+                            rr.append(rr1)
+                            first = False
+                        else:
+                            # Add rr1 as milliseconds (Actually it is 1/1024 sec)
+                            time.append(dt + timedelta(milliseconds=rr1))
+                            hr.append(hr_val)
+                            rr.append(rr1)
+
     return time, hr, rr
 
 def write_ecg_file(ecg, peaks, header, filename = r'data\ecg_test_data.csv',
@@ -258,3 +358,28 @@ def format_duration(seconds: int):
         elif s > 0:
             return '{:02d}s'.format(s)
     return '-'
+
+def pip_list(print_stdout=True):
+    '''Runs pip list and optionally prints the output'''
+    import subprocess, sys
+    print('pip_list:')
+    args = [sys.executable, '-m', 'pip', 'list']
+    p = subprocess.run(args, check=True, capture_output=True)
+    if print_stdout:
+        print(p.stdout.decode())
+    return p.stdout.decode()
+
+def pip_show(package, print_stdout=True ):
+    '''Runs pip show for the package and optionally prints the output'''
+    import subprocess, sys
+    args = [sys.executable, "-m", "pip", "show", package]
+    p = subprocess.run(args, check=True, capture_output=True)
+    if print_stdout:
+        print(p.stdout.decode())
+    return p.stdout.decode()
+
+def print_module_filename(file):
+    ''' Prints the name of the module. Use __file__ for the desired module.
+        Example: print_module_name(__file__)
+    '''
+    print(os.path.basename(os.path.normpath(file)))
