@@ -15,7 +15,7 @@ HR_200_INTERVAL = int(60.0 / 200.0 * FS)
 # Expected signal delay (Butterworth ~7, Derivative 4, Square 1)
 SIGNAL_DELAY = 12
 
-def score_real_time(filename, show_progress = False):
+def score_real_time(filename, show_progress = False, fw=None):
     '''
     This is the scoring part of run_real_time.
     Returns ecg, x_ecg, peak_indices, headers, avg, score, ecg_ext, cur_x
@@ -39,7 +39,13 @@ def score_real_time(filename, show_progress = False):
     #Scoring
     # This is the group delay, used for searching ecg for maxima
     # Only used for scoring
-    score_offset = 0 
+    score_offset = 8
+    # Look around score_offset by =/- this much to find true maximum
+    offset_error = 5
+
+    # Multiplier for mean + n_stdev * stddev in threshold criteria
+    n_stdev = 2
+  
     peaks = []
     peak_indices = []
     max_avg = []
@@ -48,10 +54,6 @@ def score_real_time(filename, show_progress = False):
     score_start = 0
     score_end = 0
     max_index = min_index = -1
-
-    # 
-
-    print_scores = False
 
    # Create an extended array with zeros in the last score_offset places
     ecg_ext = ecg.copy() + [0.0] * score_offset
@@ -70,16 +72,22 @@ def score_real_time(filename, show_progress = False):
     ##print(f'Starting {threshold=} {moving_average_height.avg()=}')
 
     # Initialize these with observed values
-    stat_initial_mean = 0.01
-    stat_initial_stddev = .04
+    stat_initial_mean = .00
+    stat_initial_stddev = .03
     sumvals = stat_initial_mean * HR_200_INTERVAL
-    sumsquares = (stat_initial_stddev * stat_initial_stddev -
+    sumsq = (stat_initial_stddev * stat_initial_stddev -
                   stat_initial_mean * stat_initial_mean) * HR_200_INTERVAL
     n_stat = HR_200_INTERVAL
 
+    # Set up usage statistics
+    offset_delta_n = 0
+    offset_delta_sum = 0
+    offset_delta_sumsq = 0
+    offset_delta_max = 0
+    offset_delta_min = 0
+
     peak_index = -1
     max_val = -sys.float_info.max
-
     # Loop over ECG values
     for i in range(0, n_ecgext):
         if len(cur_ecg) == keep:
@@ -128,58 +136,85 @@ def score_real_time(filename, show_progress = False):
         avg = [0.] * n_ecgext # Not using avg
 
         input = cur_square
-       
+
         # Process finding the peaks
         if i % HR_200_INTERVAL == 0 or i == n_ecgext - 1:
+            # End of interval, process this interval
             if i > 0 and peak_index != -1:
-                if False:
-                    # peak_index is the index of the max of the input
-                    # There is a signal delay, expected to be 12
-                    # Find the max ecg in this interval
-                    start_interval = max(0, i - SIGNAL_DELAY)
-                    end_interval = i
-                    max_val = -sys.float_info.max
-                    peak_index1 = -1
-                    for i1 in range(start_interval, end_interval + 1):
-                        if ecg_ext[i1] > max_val:
-                            max_val = ecg_ext[i1]
-                            peak_index1 = i1
-                    if peak_index1 > -1:
-                        peak_index = peak_index1
 
-                # Process the current interval
-                max_val = ecg_ext[peak_index]
+                # Check if this actually at the local maximum
+                local_ecg_max = max_ecg_val
+                new_peak_index = peak_index
+                for i1 in range(peak_index - offset_error, peak_index + offset_error + 1):
+                    if ecg_ext[i1] > local_ecg_max:
+                        local_ecg_max = ecg_ext[i1]
+                        new_peak_index = i1
+                # Offset statistics
+                offset_delta_n = offset_delta_n + 1
+                offset = peak_index - new_peak_index
+                offset_delta_sum = offset_delta_sum + offset
+                offset_delta_sumsq = offset_delta_sumsq + offset * offset
+                if offset > offset_delta_max:
+                    offset_delta_max = offset
+                if offset < offset_delta_min:
+                    offset_delta_min = offset
+                # Use the new peak_index
+                peak_index = new_peak_index
                 # Check if there is a close one in the previous interval
                 if len(peak_indices) > 0:
                     last_index = len(peak_indices) - 1 # last index in peak_indices
                     last_peak_index = peak_indices[last_index]
                     if peak_index - last_peak_index < HR_200_INTERVAL:
-                        last_max_val = ecg_ext[last_peak_index]
-                        if max_val >= last_max_val:
+                        last_max_ecg_val = ecg_ext[last_peak_index]
+                        if max_ecg_val >= last_max_ecg_val:
                             peak_indices[last_index] = peak_index
                     else:
                         peak_indices.append(peak_index)
                 else:
                     peak_indices.append(peak_index)
-                # Start a new interval
-                peak_index = -1
-                max_val = -sys.float_info.max
+                
+            # Start a new interval
+            peak_index = -1
+            max_ecg_val = -sys.float_info.max
+
         # Accumulate statistics
         val = input[-1]
+        ecgval = ecg_ext[i - score_offset]
         n_stat = n_stat + 1
         sumvals = sumvals + val
-        sumsquares = sumsquares + val * val
+        sumsq = sumsq + val * val
         mean = sumvals / n_stat
-        variance = sumsquares/ n_stat + mean*mean
+        variance = sumsq/ n_stat + mean*mean
         stddev = math.sqrt(variance)
-        if val > mean + 2 * stddev:
-            if val >= max_val:
-                peak_index = i
-                max_val = ecg_ext[i]
+        if val > mean + n_stdev * stddev:
+            if ecgval >= max_ecg_val:
+                max_ecg_val = ecg_ext[i - score_offset]
+                peak_index = i - score_offset
+
         # Print mean and stddev values
-        if True:
+        if False:
             interval = 500
             if i < 80 or i % interval == 0 or i == n_ecgext-1:
                 print(f'{i=} {n_stat=} {mean=} {stddev=}')
+
+        #if i < HR_200_INTERVAL:
+        #    if max_val == -sys.float_info.max:
+        #        print(f'{i=} {val=:0.3f} {peak_index=} max_val=undef')
+        #    else:
+        #        print(f'{i=} {val=:0.3f} {peak_index=} {max_val=:.3f}')
+
+    if fw:
+        if offset_delta_n:
+            offset_delta_avg = offset_delta_sum / offset_delta_n
+            offset_delta_stdev = math.sqrt(offset_delta_sumsq / offset_delta_n +\
+                offset_delta_avg * offset_delta_avg)
+        else:
+            offset_delta_avg = offset_delta_stdev = 0
+        fw.write(f'{filename},{len(ecg)},{score_offset},{offset_error},'
+                    + f'{offset_delta_avg:.3f},{offset_delta_min},'
+                    + f'{offset_delta_max},{offset_delta_stdev:.3f},'
+                    + f'{mean:.3f},{stddev:.3f}\n')
+    if True:
+        print(f'{n_stat=} {mean=} {stddev=}')
 
     return ecg, x_ecg, peak_indices, headers, bandpass, deriv, square, avg, score, ecg_ext, cur_x

@@ -5,7 +5,8 @@ run_real_time() processes the input file using moving windows.
 run_process_after() processes the input file all at once (not real-time).
 '''
 
-from pickle import TRUE
+from operator import truediv
+from pickle import FALSE, TRUE
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.fft import fft, fftfreq
@@ -28,17 +29,28 @@ HR_200_INTERVAL = int(60.0 / 200.0 * FS)
 # Width of plot to show in custom zoomed view
 ZOOMED_PLOT_WIDTH_SEC = 6
 
-class score:
-    def __init__(self, ecg, peaks, name, color, markersize=6):
-        self.ecg = ecg
+class curve_data:
+    def __init__(self, data, peaks, name, color, marker=None, markersize=6):
+        self.data = data
         self.peaks = peaks
         self.name = name
         self.color = color
         self.markersize = markersize
+        self.marker = marker
 
 def plot_peaks(ecg, ecg_x, peak_indices,
                title='Detected Peaks', filename=None, xlim = None, use_points=False,
-               bandpass=None, deriv=None, square=None, do_intervals=False):
+               curves=None, do_intervals=False):
+    '''Plots ecg and the peaks. Optionally adds other curves.
+    ecg: The ECG values, assumed the same for all curves
+    ecg_x: The x values for the ECG
+    xlim: None or xlim[0] = start, xlim[1]=end values for x axis
+    use_points: Use markers to show individual points
+        markersize = 2
+        default is no markers
+    do_intervals: Show the HR_200_INTERVAL's
+    curves: List of curve_data to use for extra plots
+    '''
     peak_vals = [ecg[i] for i in peak_indices]
     peak_x = [ecg_x[i] for i in peak_indices]
     plt.figure(figsize=(10,6))
@@ -50,15 +62,17 @@ def plot_peaks(ecg, ecg_x, peak_indices,
         marker = None
     plt.plot(ecg_x, ecg, marker=marker, markersize = 2, label='ECG')
     do_legend = False
-    if bandpass:
+    if curves:
         do_legend = True
-        plt.plot(ecg_x, bandpass, color="gold", marker=marker, markersize = 2, label='Bandpass')
-    if deriv:
-        do_legend = True
-        plt.plot(ecg_x, deriv, color="g", marker=marker, markersize = 2, label='Deriv')
-    if square:
-        do_legend = True
-        plt.plot(ecg_x, square, color="b", marker=marker, markersize = 2, label='Square')
+        for i in range(len(curves)):
+            curve = curves[i]
+            if curve.data:
+                plt.plot(ecg_x, curve.data, color=curve.color, marker=None, label=curve.name)
+            if curve.peaks:
+                y = [ecg[i] for i in curve.peaks]
+                x = [ecg_x[i] for i in curve.peaks]
+                plt.plot(x, y, color=curve.color, marker=None, label=f'{curve.name} Peaks')
+    
     if do_intervals:
         intervals = []
         intervals_x = []
@@ -67,10 +81,11 @@ def plot_peaks(ecg, ecg_x, peak_indices,
                 intervals.append(.25)
                 intervals_x.append(ecg_x[i])
         plt.plot(intervals_x, intervals, color='tomato', marker='|')
+
     plt.plot(peak_x, peak_vals, "ro")
+
     if do_legend:
         plt.legend(loc='lower right', framealpha=0.6)
-    
     title_used = title
     title_used = f'{title_used} ({len(peak_indices)} Peaks)'
     if filename:
@@ -82,7 +97,7 @@ def plot_peaks(ecg, ecg_x, peak_indices,
     plt.tight_layout()
     plt.show()
 
-def plot_comparison(scores,
+def plot_comparison(scores, filename=None,
         height_fract = 0, title='Peak Detection Comparison',
         show_segments = False, show_segments_only = False,
         sample_rate = FS):
@@ -90,7 +105,10 @@ def plot_comparison(scores,
     # Determine markersizes
     n_scores = len(scores)
     # Assume all ecg are the same, use the first
-    ecg = scores[0].ecg
+    ecg = scores[0].data
+    if len(ecg) == 0:
+        print('There are no ecg values')
+        return
     markersize = 2
     for i in range(n_scores):
         score = scores[i]
@@ -111,11 +129,14 @@ def plot_comparison(scores,
     for i in range(n_scores-1, -1, -1):
         score = scores[i]
         if score:
-            npeaks = add_peaks(score, 0, len(score.ecg), sample_rate,
+            npeaks = add_peaks(score, 0, len(score.data), sample_rate,
                 marker = 'o', color=score.color, markersize = score.markersize,
                 label = f'{score.name} ({len(score.peaks)} peaks)')
 
-    plt.title(f'{title}\n{filename}')
+    if not filename:
+        plt.title(f'{title}')
+    else:
+        plt.title(f'{title}\n{filename}')
     plt.xlabel(f'time, sec (sample_rate={sample_rate})')
     plt.legend(loc='lower right', framealpha=0.6)
     plt.tight_layout
@@ -144,9 +165,9 @@ def plot_comparison(scores,
         for i in range(n_scores-1, -1, -1):
             score = scores[i]
             if score:
-                npeaks = add_peaks(score.ecg, score.peaks, start, end, sample_rate,
-                    marker = 'o', color = score.color, markersize = score.markersize,
-                    label = f'{score.name} ({len(score.peaks)} peaks)')
+                npeaks = add_peaks(score, start=start, end=end, sample_rate=FS,
+                    marker='o', color=score.color, markersize=score.markersize,
+                    label=f'{score.name} ({len(score.peaks)} peaks)')
 
         plt.title(f'{title}\n{filename}')
         plt.xlabel(f'time, sec (sample_rate={sample_rate})')
@@ -154,13 +175,17 @@ def plot_comparison(scores,
         plt.tight_layout()
         plt.show()
 
-def add_peaks(score, start, end, sample_rate, color, marker, markersize,
-        label):
+def add_peaks(score, start=None, end=None, sample_rate=FS,
+             color='red', marker=None, markersize=6, label=''):
     ''' Adds a peaks array to plt in the range start to end.'''
     if not score:
         return
+    if not start:
+        start = 0
+    if not end:
+        end = len(score)
     peak_x = [x for x in score.peaks if x >= start and x < end]
-    peak_vals = [score.ecg[i] for i in peak_x]
+    peak_vals = [score.data[i] for i in peak_x]
     peak_time = []
     for i in peak_x:
         peak_time.append(i / sample_rate)
@@ -460,7 +485,7 @@ def run_process_after(filename):
 def run_real_time(filename, score_real_time, show_progress = False, 
             write_csv = False, plot_peaks_zoomed = False,
             plot_analysis = True, plot_all_filter_steps = False,
-            plot_rr = False):
+            plot_rr = False, title=''):
     '''
     This version collects cur_bandpass, cur_deriv, etc. separately
     rather than in one cur_filter. It handles mostly plotting and printing.
@@ -480,10 +505,6 @@ def run_real_time(filename, score_real_time, show_progress = False,
     for header in headers:
         print(header)
     description = ut.find_header_description(headers)
-    if description:
-        title = f'Real Time Processing\n{filename}\n{description}'
-    else:
-        title = f'Real Time Processing\n{filename}'
 
     # Plot peaks
     if True:
@@ -492,7 +513,7 @@ def run_real_time(filename, score_real_time, show_progress = False,
         else:
             peak_filename = filename
         plot_peaks(ecg, x_ecg, peak_indices, filename=peak_filename,
-                   title=score_title)
+                   title=title)
 
     # Plot peaks zoomed
     if plot_peaks_zoomed:
@@ -573,10 +594,36 @@ def run_real_time(filename, score_real_time, show_progress = False,
         ut.write_ecg_file(ecg_ext, peak_indices, headers, outfile,
             simulation_str = f'HeartPy.process_ecg.run_real_time {timestamp}')
 
-def check_real_time(filename, score_real_time, show_progress = False,
+def scale1_stats(score_real_time):
+    ''' Collects statistics from Scale1 algorithm for all files in the given
+   directiory matching the given pattern and writes them to CSV file in the
+   given directory with name of the form: Scale1Stats_YYYY-MM-DD_HH-MM.csv.
+   '''
+    src_dir = r'C:\Scratch\ECG\Polar ECG\CSV'
+    pattern = 'PolarECG-2022*.csv'
+    dst_dir = r'C:\Scratch\AAA\Python\HeartPy'
+
+    print('Running scale1_stats (May take a while)...')
+    from pathlib import Path
+    date = datetime.now().strftime('%Y-%M-%d_%H-%M')
+    dst_file = fr'{dst_dir}\Scale1Stats_{date}.csv'
+    with open(dst_file, 'w') as fw:
+        fw.write('name,length,score_offset,offset_error,offset_delta_avg,'
+                    + f'offset_delta_min,offset_delta_max,'
+                    + f'offset_delta_stdev,mean,stddev\n')
+        for filename in Path(src_dir).glob(pattern):
+            ecg, x_ecg, peak_indices, headers, bandpass, deriv, square, avg,\
+                    score, ecg_ext, cur_x = \
+                    score_real_time(filename, show_progress = False, fw=fw)
+    print(f'Wrote {dst_file}')
+    fw.close()
+
+def analyze(filename, score_real_time, show_progress = False,
                    plot_peaks_zoomed=False,
                    plot_bandpass=False, plot_deriv=False, plot_square=False,
-                   use_points=False):
+                   plot_avg=False, plot_score=False,
+                   do_intervals=False, use_points=False,
+                   title=''):
     ''' Runs score_real_time and generates plots to check for how well the
     algorithm did.
     '''
@@ -589,10 +636,6 @@ def check_real_time(filename, score_real_time, show_progress = False,
     for header in headers:
         print(header)
     description = ut.find_header_description(headers)
-    if description:
-        title = f'Real Time Processing\n{filename}\n{description}'
-    else:
-        title = f'Real Time Processing\n{filename}'
 
     # Print results
     npeaks = ut.find_header_item(headers, 'npeaks')
@@ -608,22 +651,53 @@ def check_real_time(filename, score_real_time, show_progress = False,
         else:
             peak_filename = filename
 
+        curves = []
+        # Values for the original algorithm are extended
+        end = len(ecg)
         for i in range(3):
-            bandpass1= square1 = deriv1 = None
-            if plot_bandpass:
-                bandpass1 = bandpass
-            if plot_deriv:
-                deriv1 = deriv
-            if plot_square:
-                square1 = square
+            if plot_bandpass and bandpass and len(bandpass) > 0:
+                curves.append(curve_data(bandpass[0:end], None, 'Bandpass', 'yellow'))
+            if plot_deriv and deriv and len(deriv) > 0:
+                curves.append(curve_data(deriv[0:end], None, 'Deriv', 'mediumorchid'))
+            if plot_square and square and len(square) > 0:
+                curves.append(curve_data(square[0:end], None, 'Square', 'crimson'))
+            if plot_avg and avg and len(avg) > 0:
+                curves.append(curve_data(avg[0:end], None, 'Avg', 'gold'))
+            if plot_score and score and len(score) > 0:
+                curves.append(curve_data(score[0:end], None, 'Score', 'green'))
             plot_peaks(ecg, x_ecg, peak_indices, filename=peak_filename,
-                xlim=[i * 10, i * 10 + 10], title='Peaks Detected Analysis',
-                bandpass=bandpass1, square=square1, deriv=deriv1,
+                xlim=[i * 10, i * 10 + 10], title=title,
+                curves=curves,
                 use_points=use_points,
                 do_intervals=True)
-        
+
+
+def multiple_compare():
+    ''' Compares al the files in the given directory matching the pattern '''
+    src_dir = r'C:\Scratch\ECG\Polar ECG\CSV'
+    pattern = 'PolarECG-2022*.csv'
+
+    print('Running multiple_compare (May take a while)...')
+    from pathlib import Path
+    src_dir = r'C:\Scratch\ECG\Polar ECG\CSV'
+    for filename in Path(src_dir).glob(pattern):
+        scores=[]
+        ecg, x_ecg, peak_indices, _, _, _, _, _, _, _, _\
+           = sc0.score_real_time(filename, show_progress = False)
+        scores.append(curve_data(ecg, peak_indices, 'QRS Detection Jun 2022', 'red'))
+
+        ecg, x_ecg, peak_indices, _, _, _, _, _, _, _, _\
+           = sc1.score_real_time(filename, show_progress = False)
+        scores.append(curve_data(ecg, peak_indices, 'QRS Detection Dec 2022', 'dodgerblue'))
+
+        print(filename)
+        plot_comparison(scores, filename,
+                        height_fract = 0, title='Peak Detection Comparison',
+                        show_segments = False, show_segments_only = False,
+                        sample_rate = FS)
+
 def main():
-    global filename
+    #global filename
     ut.print_module_filename(__file__)
 
      # Set prompt to use default filename or prompt with a FileDialog
@@ -672,7 +746,7 @@ def main():
     #test2()
 
     # Determine scoring algorithm
-    algorithm = 2
+    algorithm = 1
     if algorithm == 0:
         score_real_time = sc0.score_real_time
     elif algorithm == 1:
@@ -680,48 +754,74 @@ def main():
     elif algorithm == 2:
         score_real_time = sc2.score_real_time
 
-    global score_title
     score_title = f'QRS Algorithm {algorithm} Detected Peaks'
+    score_analysis_title = f'QRS Algorithm {algorithm} Detected Peaks Analysis'
+
+    print(f'QRS Algorithm {algorithm}')
+
+    do_comparison = False
+    do_multiple_comparison = False
+    do_analyze = False
+    do_scale1_stats = False
+    do_run_real_time = True
+    if do_comparison:
+        print(f'  do_comparison')
+    if do_scale1_stats:
+        print(f'  do_scale1_stats')
+    if do_analyze:
+        print(f'  do_analyze')
+    if do_run_real_time:
+        print(f'  do_run_real_time')
+    print()
 
     # Do a comparison
-    if False:
+    if do_comparison:
         scores=[]
         ecg, x_ecg, peak_indices, _, _, _, _, _, _, _, _\
            = sc0.score_real_time(filename, show_progress = False)
-        scores.append(score(ecg, peak_indices, 'QRS Detection Jun 2022', 'red'))
+        scores.append(curve_data(ecg, peak_indices, 'QRS Detection Jun 2022', 'red'))
         print(f'{len(ecg)=} {len(x_ecg)=} {len(peak_indices)=}')
 
         ecg, x_ecg, peak_indices, _, _, _, _, _, _, _, _\
            = sc1.score_real_time(filename, show_progress = False)
-        scores.append(score(ecg, peak_indices, 'QRS Detection Dec 2022', 'dodgerblue'))
+        scores.append(curve_data(ecg, peak_indices, 'QRS Detection Dec 2022', 'dodgerblue'))
         print(f'{len(ecg)=} {len(x_ecg)=} {len(peak_indices)=}')
         
         ecg, x_ecg, peak_indices, _, _, _, _, _, _, _, _\
            = sc2.score_real_time(filename, show_progress = False)
-        scores.append(score(ecg, peak_indices, 'QRS Detection Dec 2022 (ECG only)', 'orange'))
+        scores.append(curve_data(ecg, peak_indices, 'QRS Detection Dec 2022 (ECG only)', 'orange'))
         print(f'{len(ecg)=} {len(x_ecg)=} {len(peak_indices)=}')
         
         ecg, x_ecg, peak_indices = wav.run(filename, use_ecg=True, plot=False)
-        scores.append(score(ecg, peak_indices, 'Wavelet QRS Detection', 'green'))
+        scores.append(curve_data(ecg, peak_indices, 'Wavelet QRS Detection', 'green'))
         print(f'{len(ecg)=} {len(x_ecg)=} {len(peak_indices)=}')
 
         plot_comparison(scores,
                         height_fract = 0, title='Peak Detection Comparison',
                         show_segments = True, show_segments_only = False,
                         sample_rate = FS)
+
+    if do_multiple_comparison:
+        multiple_compare()
     
     if False:
         # Processing entire file, uses the specified algorithm
         run_process_after(filename)
-    if True:
-        # Check the file vs processed peaks, , uses the specified algorithm
-        print('Running check_real_time')
-        check_real_time(filename, score_real_time, show_progress = False,
-                       plot_peaks_zoomed=True,
-                       plot_bandpass = True, plot_deriv=True, plot_square=True,
-                       use_points=True)
 
-    if True:
+    if do_scale1_stats:
+        scale1_stats(sc1.score_real_time)
+ 
+    if do_analyze:
+        # Check the file vs processed peaks, , uses the specified algorithm
+        print('Running analysis')
+        analyze(filename, score_real_time, show_progress = False,
+                       plot_peaks_zoomed=True,
+                       plot_bandpass = False, plot_deriv=False, plot_square=True,
+                       plot_avg=True, plot_score=True,
+                       do_intervals=True, use_points=True,
+                       title=score_analysis_title)
+
+    if do_run_real_time:
         # Processing as we go, uses the specified algorithm
         print('Running run_real_time')
         #run_real_time(filename, score_real_time, show_progress = True, write_csv = False)
@@ -729,7 +829,7 @@ def main():
                      plot_all_filter_steps = False, # Creates a 6-figure plot of all steps
                      plot_peaks_zoomed = False, # Plot the peaks zoomed in
                      plot_analysis = False, # Plots of the steps, one zoomed, one not
-                     write_csv = False)
+                     write_csv = False, title=score_title)
 
 if __name__ == "__main__":
     main()
