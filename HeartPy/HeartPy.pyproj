@@ -49,6 +49,8 @@
     </Compile>
     <Compile Include="score0.py" />
     <Compile Include="score1.py" />
+    <Compile Include="score1a.py" />
+    <Compile Include="score1b.py" />
     <Compile Include="score2.py" />
     <Compile Include="session.py">
       <SubType>Code</SubType>

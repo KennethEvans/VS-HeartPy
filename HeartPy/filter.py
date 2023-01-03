@@ -8,8 +8,9 @@ General digital filter routines for
 
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.ndimage.filters import uniform_filter1d
+from scipy.ndimage import uniform_filter1d
 import os.path as path
+import math
 
 A_BUTTERWORTH2 = [1.0, -2.657395687639593, 2.8635274589099367,
                -1.5335175290358518, 0.36156443847608805,]
@@ -387,10 +388,70 @@ def test_moving_average():
     plt.title('Moving Average Calculation Comparison')
     plt.legend(loc='upper left', framealpha=0.6)
     plt.show()
+
+def test_derivative():
+    n = 101
+    keep = 10   # Could be as low as 4
+    signal = [math.sin(i * 4 * math.pi / (n - 1)) for i in range(n)]
+    cur_ecg = []
+    cur_deriv=[]
+    cur_square1=[]
+    cur_square2=[]
+
+    deriv = []
+    square1 = []
+    square2 = []
+    for i in range(n):
+        if len(cur_ecg) == keep:
+            cur_ecg.pop(0)
+        cur_ecg.append(signal[i])
+
+        # Derivative
+        input = cur_ecg
+        if len(cur_deriv) == keep:
+             cur_deriv.pop(0)
+        cur_deriv.append(0) # Doesn't matter
+        new = derivative(input, cur_deriv)
+        cur_deriv[-1] = new
+        cur_deriv.append(new)
+        deriv.append(new)
+
+        # Square without derivative
+        input = cur_ecg
+        if len(cur_square1) == keep:
+             cur_square1.pop(0)
+        cur_square1.append(0) # Doesn't matter
+        new = square(input, cur_square1)
+        cur_square1[-1] = new
+        square1.append(new)
+
+        # Square with derivtive
+        input = cur_deriv
+        if len(cur_square2) == keep:
+             cur_square2.pop(0)
+        cur_square2.append(0) # Doesn't matter
+        new = square(input, cur_square2)
+        cur_square2[-1] = new
+        square2.append(new)
+
+    plt.figure(figsize=(10, 6))
+    #plt.xlabel('Time (s)')
+    #plt.plot(x_data, data, label='ECG Data');
+    plt.plot(signal, label='Signal', marker='o', markersize=2)
+    plt.title('Derivative Filter')
+    plt.plot(deriv, label='Derivative', marker='o', markersize=2, color='gold')
+    plt.plot(square1, label='Square', marker='o', markersize=2, color='green')
+    plt.plot(square2, label='Derivative and Square', marker='o', markersize=2, color='crimson')
+    # Show the axis
+    plt.axhline(0, color='black', linewidth=.5)
+    plt.title('Derivative Filter')
+    plt.legend(loc='lower left', framealpha=0.6)
+    plt.show()
     
 def main():
     print(path.basename(path.normpath(__file__)))
-    test_moving_average()
+    #test_moving_average()
+    test_derivative()
 
 if __name__ == "__main__":
     main()
