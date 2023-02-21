@@ -61,8 +61,16 @@ B_BUTTERWORTH9 = [1.8914555515522274e-05, 0.0, -0.00017023099963970047,
                 0.0, 0.0023832339949558063, 0.0, -0.0023832339949558063, 
                 0.0, 0.001588822663303871, 0.0, -0.0006809239985588019, 
                 0.0, 0.00017023099963970047, 0.0, -1.8914555515522274e-05,]
+A_DERIVATIVE_BAD = [1]
+B_DERIVATIVE_BAD = [0.5, 0.25, -0.25, -0.5]
 A_DERIVATIVE = [1]
-B_DERIVATIVE = [0.5, 0.25, -0.25, -0.5]
+B_DERIVATIVE = [0.5, 0.25, 0, -0.25, -0.5]
+A_DERIVATIVE5 = [12.]
+B_DERIVATIVE5 = [25., -48., 36., -16., 3.]
+A_DERIVATIVE4 = [6.]
+B_DERIVATIVE4 = [11., -18., 9., -2.]
+A_DERIVATIVE3 = [2.]
+B_DERIVATIVE3 = [3., -4., 1.]
 
 def filter_alt(a, b, x, y):
     '''Calculates a result for a generalized filter. Only includes terms
@@ -236,6 +244,21 @@ def butterworth6(x, y):
 def derivative(x, y):
     a = A_DERIVATIVE
     b = B_DERIVATIVE
+    return filter(a, b, x, y)
+
+def derivative5(x, y):
+    a = A_DERIVATIVE5
+    b = B_DERIVATIVE5
+    return filter(a, b, x, y)
+ 
+def derivative4(x, y):
+    a = A_DERIVATIVE4
+    b = B_DERIVATIVE4
+    return filter(a, b, x, y)
+
+def derivative3(x, y):
+    a = A_DERIVATIVE3
+    b = B_DERIVATIVE3
     return filter(a, b, x, y)
     
 def square(x, y):
@@ -438,7 +461,6 @@ def test_derivative():
     #plt.xlabel('Time (s)')
     #plt.plot(x_data, data, label='ECG Data');
     plt.plot(signal, label='Signal', marker='o', markersize=2)
-    plt.title('Derivative Filter')
     plt.plot(deriv, label='Derivative', marker='o', markersize=2, color='gold')
     plt.plot(square1, label='Square', marker='o', markersize=2, color='green')
     plt.plot(square2, label='Derivative and Square', marker='o', markersize=2, color='crimson')
@@ -448,10 +470,144 @@ def test_derivative():
     plt.legend(loc='lower left', framealpha=0.6)
     plt.show()
     
+def test_derivative_2():
+    ''' Tests derivative options using part of a file
+    '''
+    # 02-26-2022 Sitting, HR mostly steady
+    filename =  r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2022-02-26_16-12.csv'
+    start_ecg = 2350
+    end_ecg = 2450
+
+    # Read the file
+    import utils as ut
+    ecg, _, headers = ut.read_ecg_file(filename)
+    necg = len(ecg)
+    print(filename)
+    print('\nHeader Information:')
+    for header in headers:
+        print(header)
+    #description = ut.find_header_description(headers)
+    #if description:
+    #    title = f'Process After\n{filename}\n{description}'
+    #else:
+    #    title = f'Process After\n{filename}'
+
+    signal = ecg[start_ecg:end_ecg + 1]
+    n = len(signal)
+    x_data = [i + start_ecg for i in range(n)]
+
+    keep = 20
+    cur_ecg = []
+    cur_deriv  = []
+    cur_deriv1 = []
+    cur_deriv2 = []
+    cur_deriv3 = []
+    cur_deriv4 = []
+
+    deriv = []
+    deriv1 = []
+    deriv2 = []
+    deriv3 = []
+    deriv4 = []
+
+    for i in range(n):
+        if len(cur_ecg) == keep:
+            cur_ecg.pop(0)
+        cur_ecg.append(signal[i])
+
+        # Derivative
+        label = 'Derivative'
+        input = cur_ecg
+        if len(cur_deriv) == keep:
+             cur_deriv.pop(0)
+        cur_deriv.append(0) # Doesn't matter
+        new = derivative(input, cur_deriv)
+        cur_deriv[-1] = new
+        cur_deriv.append(new)
+        deriv.append(new)
+
+        # Bad derivative
+        label1 = 'Bad Derivative'
+        def derivative1(x, y):
+             a = A_DERIVATIVE_BAD
+             b = B_DERIVATIVE_BAD
+             return filter(a, b, x, y)
+        input = cur_ecg
+        if len(cur_deriv1) == keep:
+             cur_deriv1.pop(0)
+        cur_deriv1.append(0) # Doesn't matter
+        new = derivative1(input, cur_deriv1)
+        cur_deriv1[-1] = new
+        cur_deriv1.append(new)
+        deriv1.append(new)
+
+        # Web Calculator for (-4,-3,-2,-1,0)
+        label2 = 'Web Calculator for (-4,-3,-2,-1,0)'
+        #def derivative2(x, y):
+        #     a = [1]
+        #     b = [x / 12. for x in [25., -48., 36., -16., 3.]]
+        #     return filter(a, b, x, y)
+        input = cur_ecg
+        if len(cur_deriv2) == keep:
+             cur_deriv2.pop(0)
+        cur_deriv2.append(0) # Doesn't matter
+        new = derivative5(input, cur_deriv2)
+        cur_deriv2[-1] = new
+        cur_deriv2.append(new)
+        deriv2.append(new)
+
+        # Web Calculator for (-3,-2,-1,0)
+        label3 = 'Web Calculator for (-3,-2,-1,0)'
+        #def derivative3(x, y):
+        #     a = [1]
+        #     b = [x / 6. for x in [11., -18., 9., -2.]]
+        #     return filter(a, b, x, y)
+        input = cur_ecg
+        if len(cur_deriv3) == keep:
+             cur_deriv3.pop(0)
+        cur_deriv3.append(0) # Doesn't matter
+        new = derivative4(input, cur_deriv3)
+        cur_deriv3[-1] = new
+        cur_deriv3.append(new)
+        deriv3.append(new)
+
+        # Web Calculator for (-2,-1,0)
+        label4 = 'Web Calculator for (-2,-1,0)'
+        #def derivative4(x, y):
+        #     a = [1]
+        #     b = [x / 2. for x in [3., -4., 1.]]
+        #     return filter(a, b, x, y)
+        input = cur_ecg
+        if len(cur_deriv4) == keep:
+             cur_deriv4.pop(0)
+        cur_deriv4.append(0) # Doesn't matter
+        new = derivative3(input, cur_deriv4)
+        cur_deriv4[-1] = new
+        cur_deriv4.append(new)
+        deriv4.append(new)
+
+
+    plt.figure(figsize=(10, 6))
+    #plt.xlabel('Time (s)')
+    #plt.plot(x_data, data, label='ECG Data');
+    plt.plot(x_data, signal, label='Signal', marker='o', markersize=2)
+    plt.plot(x_data, deriv, label=label, marker='o', markersize=2, color='gold')
+    plt.plot(x_data, deriv1, label=label1, marker='o', markersize=2, color='green')
+    plt.plot(x_data, deriv2, label=label2, marker='o', markersize=2, color='crimson')
+    plt.plot(x_data, deriv3, label=label3, marker='o', markersize=2, color='tomato')
+    plt.plot(x_data, deriv4, label=label4, marker='o', markersize=2, color='orangered')
+    # Show the axis
+    plt.axhline(0, color='black', linewidth=.5)
+    #plt.title(f'Derivitive Filter Comparison\n{filename}\nFrom {start_ecg} to {end_ecg}')
+    plt.title(f'Derivative Filter Comparison\n{filename}')
+    plt.legend(loc='lower left', framealpha=0.6)
+    plt.show()
+    
 def main():
     print(path.basename(path.normpath(__file__)))
     #test_moving_average()
-    test_derivative()
+    #test_derivative()
+    test_derivative_2()
 
 if __name__ == "__main__":
     main()

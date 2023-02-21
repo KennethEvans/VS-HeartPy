@@ -6,6 +6,8 @@ import math
 import sys
 from filter import Moving_Average
 
+name = 'QRS Detection Jun 2022'
+
 # Common variables
 # Sampling rate.  These algorithms are based on this particular sampling rate.
 FS = 130.0

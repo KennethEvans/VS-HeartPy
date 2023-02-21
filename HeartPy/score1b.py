@@ -2,6 +2,8 @@
 Score1 as of 1-2-2023 using square
 '''
 
+name = 'QRS Detection Jan 2023 [1]'
+
 import numpy as np
 import utils as ut
 import filter as flt

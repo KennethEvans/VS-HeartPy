@@ -3,6 +3,8 @@ import numpy as np
 import pywt
 import utils as ut
 
+name = 'Wavelet QRS Detection'
+
 # Sampling rate.  These algorithms are based on this particular sampling rate.
 FS = 130.0
 

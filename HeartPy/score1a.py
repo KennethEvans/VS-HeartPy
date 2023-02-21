@@ -9,6 +9,8 @@ import process_ecg as pecg
 import math
 import sys
 
+name = 'QRS Detection Dec 2022'
+
 # Common variables
 # Sampling rate.  These algorithms are based on this particular sampling rate.
 FS = 130.0
