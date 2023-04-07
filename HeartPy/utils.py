@@ -314,6 +314,80 @@ def read_session_file(file_name):
 
     return time, hr, rr
 
+def read_halo_rise_file(file_name):
+    '''Reads a Halo Rise file with 3 columns, time, hr, rr.
+
+    Parameters
+    ----------
+    flename : str
+        Name of the file to read
+
+    Returns
+    -------
+    halo_sessions : list of list of time, height
+        Array of the 
+    '''
+    if not os.path.isfile(file_name):
+        print(f'Does not exist: {file_name}')
+        return None
+    with open(file_name, 'r') as read_obj:
+        print(f'{file_name=}')
+        # pass the file object to reader() to get the reader object
+        csv_reader = reader(read_obj)
+        #nrows = len(read_obj.readlines())
+        #print(f'{csv_reader=} {nrows=}')
+        # Iterate over each row in the csv using reader object
+        rownum = -1
+        analysis_col = None
+        halo_sessions = []
+        for row in csv_reader:
+            # row variable is a list that represents a row in csv
+            len_row = len(row)
+            rownum += 1
+            if not row or len_row == 0:
+                continue
+            if rownum == 0:
+                colnum = -1
+                for col in row:
+                    colnum = colnum + 1
+                    if "Sleep Analysis" in col:
+                        analysis_col = colnum
+                        if not analysis_col:
+                            print('f{row=}')
+                            print('read_halo_rise_file: Sleep Analysis column not found')
+                            return None
+                        #else:
+                        #    print(f'{analysis_col=}')
+                continue
+            tokens = row[analysis_col].split(';')
+            halo_session = []
+            for item in tokens:
+                #print(f'{item=}')
+                items = item.split('|')
+                if len(items) != 3:
+                    continue
+                if items[0] == 'WAKE':
+                    height = 4
+                elif items[0] == 'REM':
+                    height = 3
+                elif items[0] == 'LIGHT':
+                    height = 2
+                elif items[0] == 'DEEP':
+                    height = 1
+                else:
+                    # Shouldn't happen
+                    height = 0
+                start = datetime.strptime(items[1], '%Y-%m-%dT%H:%M:%S.%fz')
+                end = datetime.strptime(items[2], '%Y-%m-%dT%H:%M:%S.%fz')
+                #print(f'{height=} {start=} {end=}')
+                halo_session.append([start, height])
+                halo_session.append([end, height])
+            halo_sessions.append(halo_session)
+            #print(f'{rownum} {len(tokens)=}')
+            #print(f'{rownum=} {row[analysis_col]=}\n')
+            #dt = datetime.strptime(row[0], '%Y-%m-%d %H:%M:%S.%f')
+        return halo_sessions
+
 def write_ecg_file(ecg, peaks, header, filename = r'data\ecg_test_data.csv',
                    simulation_str='Heart.py'):
     '''Writes a CSV file with 2 columns, ecg, is_peak. There is a header at the top.

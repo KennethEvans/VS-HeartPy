@@ -962,6 +962,10 @@ def main():
         filename =  r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2023-02-13_16-27.csv'
         # 02-13-2023 Treadmill, new algorithm
         #filename =  r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2023-02-13_17-31.csv'
+        # 02-13-2023 Feb 2023 II Algorithm
+        filename =  r'C:\Scratch\ECG\Polar ECG\CSV\PolarECG-2023-02-20_17-55.csv'
+
+        
         
     #test()
     #test2()

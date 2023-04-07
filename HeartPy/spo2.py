@@ -3,7 +3,18 @@
 
 import matplotlib.pyplot as plt
 import os
+import numpy as np
+import os
 import utils as ut
+from datetime import timedelta
+
+# This is the glocal Halo file that has all sessions
+HALO_FILE = r'C:\Scratch\AAA\Amazon Data\Halo_Rise_Output_Sleep_Sessions.csv'
+
+def raw(path):
+    '''Converts a path with / to one with \\'''
+    new_path = path.replace('/', '\\');
+    return new_path
 
 def plot_session(time1, hr1, time2, hr2, filename1=None, filename2=None):
     fig = plt.figure(figsize=(10,6))
@@ -36,7 +47,8 @@ def plot_session(time1, hr1, time2, hr2, filename1=None, filename2=None):
     plt.tight_layout()
     plt.show()
 
-def plot_sp02_hr(time, spo2, hr, time2=None, notes=None, subtitle1=None, miny=90):
+def plot_sp02_hr(time, spo2, hr, time2=None, halo_session=None, notes=None,
+                subtitle1=None, miny=90):
     interval = (time[-1] - time[0]).total_seconds()
     duration = ut.format_duration(interval)
 
@@ -45,12 +57,20 @@ def plot_sp02_hr(time, spo2, hr, time2=None, notes=None, subtitle1=None, miny=90
     title_used = f'EMAY Oximeter Results (Duration={duration})'
     if subtitle1:
         title_used += f"\n{subtitle1}"
+        if halo_session:
+            title_used += f'\n{HALO_FILE}'
     plt.suptitle(title_used)
-numpy as np
-import os
     ax1 = plt.subplot(2, 1, 1)
-    ax1.set_ylim([90, 100])
+    ymin = 80
+    ax1.set_ylim([ymin, 100])
     plt.plot(time, spo2, 'cornflowerblue', label='SpO2')
+    if halo_session:
+        halo_x = []
+        halo_y = []
+        for item in halo_session:
+            halo_x.append(item[0])
+            halo_y.append(ymin + 3 + 2*item[1])
+        plt.plot(halo_x, halo_y, 'darkblue', label='Halo Rise')
     # Add annotation
     if time2  and notes:
         for i in range(len(time2)):
@@ -67,6 +87,13 @@ import os
     plt.plot(time, hr, color='red', label='HR')
     plt.ylabel('HR, bpm')
     plt.xlabel('time')
+    if halo_session:
+        halo_x = []
+        halo_y = []
+        for item in halo_session:
+            halo_x.append(item[0])
+            halo_y.append(30 + 7 * item[1])
+        plt.plot(halo_x, halo_y, 'darkblue', label='Halo Rise')
     # Add annotation
     if time2 and notes:
         # Can't use sum(hr) and len(hr) if some values are None
@@ -89,7 +116,7 @@ import os
     plt.tight_layout()
     plt.show()
 
-def read_event_timer(prompt = False):
+def read_event_timer(prompt = False, do_halo_session=False, adjust=False):
     print(os.path.basename(os.path.normpath(__file__)))
 
     # Set prompt to use default filename or prompt with a FileDialog
@@ -97,7 +124,7 @@ def read_event_timer(prompt = False):
         file_names = ut.prompt_for_files(title='Choose EMAY Oximeter file',
             multiple=False, type='csv')
         if file_names and len(file_names) > 0:
-            filename = file_names[0]
+            filename = raw(file_names[0])
         else:
             print('Canceled')
             return
@@ -127,7 +154,15 @@ def read_event_timer(prompt = False):
     #print(f'{type(time[0])=} {type(time2[0])=}')
     #for i in range(len(time2)):
     #    print(time2[i])
-    plot_sp02_hr(time, spo2, hr, time2=time2, notes=notes, subtitle1=filename) 
+
+    # get the Halo session
+    halo_session = None
+    if do_halo_session:
+        halo_sessions = ut.read_halo_rise_file(HALO_FILE)
+        halo_session = get_halo_session_for_date(time[0], halo_sessions, adjust)
+
+    plot_sp02_hr(time, spo2, hr, time2=time2, halo_session=halo_session,
+                notes=notes, subtitle1=filename) 
 
 def read_spo2(prompt = False):
     print(os.path.basename(os.path.normpath(__file__)))
@@ -204,6 +239,23 @@ def read_spo2_session(prompt = False):
     plot_session(time1, hr1, time2, hr2,
         filename1=filename1, filename2=filename2)
 
+def get_halo_session_for_date(time, sessions, adjust=False):
+    '''Searches the array of sessions for the one which has the start time
+       closest to the given time'''
+    delta_min = timedelta.max.total_seconds()
+    session_min = None
+    for halo_session in sessions:
+        if halo_session and len(halo_session[0]) == 2:
+            halo_start = halo_session[0][0]
+            delta = (halo_start - time).total_seconds()
+            if abs(delta) < abs(delta_min):
+                delta_min  = delta
+                session_min = halo_session
+    # Adjust time values to start at time
+    for item in session_min:
+        item[0] = item[0] - timedelta(seconds=delta_min)
+    return session_min
+
 def run():
     # Reads multiple Emay session files
     #read_spo2(True)
@@ -212,7 +264,7 @@ def run():
     #read_spo2_session(True)
     
     # Reads one Emay and one Event Timer file (if not canceled)
-    read_event_timer(True)
+    read_event_timer(prompt=True, do_halo_session=True, adjust=False)
 
 if __name__ == "__main__":
     run()
