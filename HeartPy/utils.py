@@ -331,7 +331,6 @@ def read_halo_rise_file(file_name):
         print(f'Does not exist: {file_name}')
         return None
     with open(file_name, 'r') as read_obj:
-        print(f'{file_name=}')
         # pass the file object to reader() to get the reader object
         csv_reader = reader(read_obj)
         #nrows = len(read_obj.readlines())

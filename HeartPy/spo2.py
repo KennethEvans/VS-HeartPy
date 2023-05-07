@@ -1,15 +1,17 @@
 ''' This module handles EMAY Oximeter SpO2 files.
+    Also Event Timer and Halo Rise files.
 '''
 
+#from this import d # Gives Zen of Python    
 import matplotlib.pyplot as plt
 import os
 import numpy as np
 import os
 import utils as ut
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 # This is the glocal Halo file that has all sessions
-HALO_FILE = r'C:\Scratch\AAA\Amazon Data\Halo_Rise_Output_Sleep_Sessions.csv'
+HALO_FILE = r'C:\Users\evans\Documents\Personal\Calc\Halo_Rise_Output_Sleep_Sessions.csv'
 
 def raw(path):
     '''Converts a path with / to one with \\'''
@@ -47,18 +49,17 @@ def plot_session(time1, hr1, time2, hr2, filename1=None, filename2=None):
     plt.tight_layout()
     plt.show()
 
-def plot_sp02_hr(time, spo2, hr, time2=None, halo_session=None, notes=None,
-                subtitle1=None, miny=90):
-    interval = (time[-1] - time[0]).total_seconds()
-    duration = ut.format_duration(interval)
-
+def plot_sp02_hr(time, spo2, hr, time2=None, halo_session=None,
+                notes=None, subtitle1=None, miny=90):
     fig = plt.figure(figsize=(10,6))
     plt.subplots_adjust(top=0.83)
+    interval = (time[-1] - time[0]).total_seconds()
+    duration = ut.format_duration(interval)
     title_used = f'EMAY Oximeter Results (Duration={duration})'
     if subtitle1:
         title_used += f"\n{subtitle1}"
         if halo_session:
-            title_used += f'\n{HALO_FILE}'
+            title_used += f'\n{HALO_FILE} ({halo_session[0][0].strftime("%Y-%m-%d")})'
     plt.suptitle(title_used)
     ax1 = plt.subplot(2, 1, 1)
     ymin = 80
@@ -116,6 +117,26 @@ def plot_sp02_hr(time, spo2, hr, time2=None, halo_session=None, notes=None,
     plt.tight_layout()
     plt.show()
 
+def plot_halo_rise(time, halo_session):
+    fig = plt.figure(figsize=(10,6))
+    plt.subplots_adjust(top=0.83)
+    title_used = f'\n{HALO_FILE} ({halo_session[0][0].strftime("%Y-%m-%d")})'
+    title_used += f'\nFrom the bottom: Deep, Light, REM, Disturbance'
+    plt.suptitle(title_used)
+    plt.xlabel('time')
+    ax = plt.gca()
+    ax.axes.yaxis.set_visible(False)
+    ymin = 0
+    halo_x = []
+    halo_y = []
+    for item in halo_session:
+        halo_x.append(item[0])
+        halo_y.append(ymin + item[1] / 4)
+    plt.plot(halo_x, halo_y, 'darkblue', label='Halo Rise')
+    plt.tight_layout()
+    plt.show()
+    return
+
 def read_event_timer(prompt = False, do_halo_session=False, adjust=False):
     print(os.path.basename(os.path.normpath(__file__)))
 
@@ -160,9 +181,24 @@ def read_event_timer(prompt = False, do_halo_session=False, adjust=False):
     if do_halo_session:
         halo_sessions = ut.read_halo_rise_file(HALO_FILE)
         halo_session = get_halo_session_for_date(time[0], halo_sessions, adjust)
+        if False:
+            # Set a specific start time
+            datetime_str = '04/24/23 12:00:00'
+            time_test = datetime.strptime(datetime_str, '%m/%d/%y %H:%M:%S')
+            halo_session = get_halo_session_for_date(time_test, halo_sessions, adjust)
 
     plot_sp02_hr(time, spo2, hr, time2=time2, halo_session=halo_session,
                 notes=notes, subtitle1=filename) 
+
+def read_halo_rise(datetime_str, adjust=False):
+    print(os.path.basename(os.path.normpath(__file__)))
+    print(f'Processing Halo Rise for date {datetime_str}\n  {HALO_FILE}')
+
+    halo_sessions = ut.read_halo_rise_file(HALO_FILE)
+    time = datetime.strptime(datetime_str, '%m/%d/%y %H:%M:%S')
+    halo_session = get_halo_session_for_date(time, halo_sessions, adjust)
+
+    plot_halo_rise(time, halo_session=halo_session)
 
 def read_spo2(prompt = False):
     print(os.path.basename(os.path.normpath(__file__)))
@@ -257,11 +293,15 @@ def get_halo_session_for_date(time, sessions, adjust=False):
     return session_min
 
 def run():
-    # Reads multiple Emay session files
+    ## Reads multiple Emay session files
     #read_spo2(True)
 
-    # Reads two session files, Emay or HR
+    ## Reads two session files, Emay or HR
     #read_spo2_session(True)
+
+    ## Reads just the Halo Rise file for a given specific start time
+    #datetime_str = '05/04/23 12:00:00'
+    #read_halo_rise(datetime_str)
     
     # Reads one Emay and one Event Timer file (if not canceled)
     read_event_timer(prompt=True, do_halo_session=True, adjust=False)
