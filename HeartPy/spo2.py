@@ -3,6 +3,8 @@
 '''
 
 #from this import d # Gives Zen of Python    
+from pickle import NONE
+from string import printable
 import matplotlib.pyplot as plt
 import os
 import numpy as np
@@ -117,7 +119,29 @@ def plot_sp02_hr(time, spo2, hr, time2=None, halo_session=None,
     plt.tight_layout()
     plt.show()
 
+def plot_halo_intervals(start_times, disturbances, intervals,
+                        title=f'Halo Rise Disturbances and Average Time Between Disturbances\n{HALO_FILE}'):
+    start_date = start_times[-1].strftime("%Y-%m-%d")
+    end_date = start_times[0].strftime("%Y-%m-%d")
+    fig = plt.figure(figsize=(10,6))
+    plt.subplots_adjust(top=0.83)
+    plt.suptitle(f'{title}\nStart Date={start_date} End Date={end_date}')
+    ax1 = plt.subplot(2, 1, 1)
+    ymin = 80
+    plt.plot(start_times, disturbances, 'cornflowerblue', label='Disturbances')
+    plt.xlabel('time')
+    plt.ylabel('Disturbances')
+
+    plt.subplot(2, 1, 2)
+    plt.plot(start_times, intervals, color='red', label='Avg. Interval')
+    plt.xlabel('intervals')
+    plt.ylabel('Average Time Between, hr')
+ 
+    plt.tight_layout()
+    plt.show()
+
 def plot_halo_rise(time, halo_session):
+    utc_offset = ut.get_local_utc_offset()
     fig = plt.figure(figsize=(10,6))
     plt.subplots_adjust(top=0.83)
     title_used = f'\n{HALO_FILE} ({halo_session[0][0].strftime("%Y-%m-%d")})'
@@ -130,7 +154,7 @@ def plot_halo_rise(time, halo_session):
     halo_x = []
     halo_y = []
     for item in halo_session:
-        halo_x.append(item[0])
+        halo_x.append(item[0] + utc_offset)
         halo_y.append(ymin + item[1] / 4)
     plt.plot(halo_x, halo_y, 'darkblue', label='Halo Rise')
     plt.tight_layout()
@@ -288,9 +312,60 @@ def get_halo_session_for_date(time, sessions, adjust=False):
                 delta_min  = delta
                 session_min = halo_session
     # Adjust time values to start at time
-    for item in session_min:
-        item[0] = item[0] - timedelta(seconds=delta_min)
+    if adjust:
+        for item in session_min:
+            item[0] = item[0] - timedelta(seconds=delta_min)
     return session_min
+
+def get_halo_intervals(plot=True, print=False):
+    utc_offset = ut.get_local_utc_offset()
+    start_times = []
+    intervals = []
+    disturbances = []
+    halo_sessions = ut.read_halo_rise_file(HALO_FILE)
+    n_sessions = len(halo_sessions);
+    for n in range(len(halo_sessions)):
+        halo_session = halo_sessions[n]
+        n_items = len(halo_session)
+        if n_items == 0:
+            continue
+        start_time = None
+        end_time = None
+        disturbances_session = 0
+        total_duration = 0
+        disturbance_duration = 0
+        interval = 0
+        for m in range(0, n_items, 2):
+            start_item = halo_session[m]
+            end_item = halo_session[m+1]
+            start = start_item[0] + utc_offset
+            if not start_time:
+                start_time = start
+            end = end_item[0] + utc_offset
+            end_time = end_item[0]
+            duration = (end - start).total_seconds()
+            total_duration = total_duration + duration
+            # Is a disturbance if it lasts 5 min = 300 sec
+            # Start and end are not included
+            height = start_item[1]
+            if height == 4 and m > 0 and m < n_items - 3 and duration >= 300:
+                 disturbances_session = disturbances_session + 1
+                 disturbance_duration = disturbance_duration + duration
+                 #print(f'     {disturbances_session}\t{start.strftime("%H:%M")}\t{end.strftime("%H:%M")}\t{duration / 60}')
+            None
+        if disturbances_session > 1:
+            interval = (total_duration - disturbance_duration) / (disturbances_session - 1) / 3600
+            start_times.append(start_time)
+            disturbances.append(disturbances_session)
+            intervals.append(interval)
+        #print(f'{start_time}      {disturbances}\t{interval}\t{total_duration}  \t{disturbances_duration}')
+    if print:
+        for s in range(len(start_times)):
+            print(f'{start_times[s]}      {disturbances[s]}\t{intervals[s]}')
+    if plot:
+        plot_halo_intervals(start_times, disturbances, intervals)
+    return start_times, disturbances, intervals
+
 
 def run():
     ## Reads multiple Emay session files
@@ -300,11 +375,14 @@ def run():
     #read_spo2_session(True)
 
     ## Reads just the Halo Rise file for a given specific start time
-    #datetime_str = '05/04/23 12:00:00'
+    #datetime_str = '05/05/23 12:00:00'
     #read_halo_rise(datetime_str)
+
+    # Get disturbances and intervals
+    get_halo_intervals()
     
-    # Reads one Emay and one Event Timer file (if not canceled)
-    read_event_timer(prompt=True, do_halo_session=True, adjust=False)
+    ## Reads one Emay and one Event Timer file (if not canceled)
+    #read_event_timer(prompt=True, do_halo_session=True, adjust=False)
 
 if __name__ == "__main__":
     run()

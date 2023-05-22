@@ -12,6 +12,14 @@ def timestamp(format = '%Y-%m-%d %H:%M:%S.%f'):
     now = datetime.now()
     return  now.strftime(format)
 
+def get_local_utc_offset():
+    '''Gets the UTC offset of the local time'''
+    millis = 1288483950000
+    ts = millis * 1e-3
+    # local time == (utc time + utc offset)
+    utc_offset = datetime.fromtimestamp(ts) - datetime.utcfromtimestamp(ts)
+    return utc_offset
+
 def prompt_for_files(title='Choose Files', multiple=False, type='csv'):
     '''Brings up a system dialog to prompt for files of the given type and
     an 'All files (*.*)" files option. You can pick the dialog title, and
@@ -325,7 +333,7 @@ def read_halo_rise_file(file_name):
     Returns
     -------
     halo_sessions : list of list of time, height
-        Array of the 
+        values for each segment each session
     '''
     if not os.path.isfile(file_name):
         print(f'Does not exist: {file_name}')
