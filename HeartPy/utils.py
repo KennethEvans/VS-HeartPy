@@ -12,7 +12,7 @@ def timestamp(format = '%Y-%m-%d %H:%M:%S.%f'):
     now = datetime.now()
     return  now.strftime(format)
 
-def get_local_utc_offset():
+def local_utc_offset():
     '''Gets the UTC offset of the local time'''
     millis = 1288483950000
     ts = millis * 1e-3
