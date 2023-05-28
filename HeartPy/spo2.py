@@ -131,10 +131,11 @@ def plot_halo_data(halo_data,
         title=f'Halo Rise Disturbances\n{HALO_FILE}'):
     start_times = halo_data[0]
     durations = halo_data[1]
-    awake_times = halo_data[2]
-    disturbances = halo_data[3]
-    intervals = halo_data[4]
-    avg_disturbance = halo_data[5]
+    sleep_times = halo_data[2]
+    awake_times = halo_data[3]
+    disturbances = halo_data[4]
+    intervals = halo_data[5]
+    avg_disturbance = halo_data[6]
     start_date = start_times[-1].strftime("%Y-%m-%d")
     end_date = start_times[0].strftime("%Y-%m-%d")
     fig = plt.figure(figsize=(10,6))
@@ -142,12 +143,14 @@ def plot_halo_data(halo_data,
     plt.suptitle(f'{title}\nStart Date={start_date} End Date={end_date}')
     ax1 = plt.subplot(2, 1, 1)
     ax2 = ax1.twinx()
-    ax1.plot(start_times, disturbances, 'firebrick', label='Disturbances')
+    ax1.plot(start_times, disturbances, 'black', label='Disturbances')
     ax1.legend(loc = 'upper left')
-    ax2.plot(start_times, durations, 'cornflowerblue', label='Total Sleep Time')
-    ax2.legend(loc = 'upper right')
+    ax2.plot(start_times, durations, 'firebrick', label='Total Sleep Time')
+    ax2.legend(loc = 'lower right')
+    ax2.plot(start_times, sleep_times, 'cornflowerblue', label='Sleep Time')
+    ax2.legend(loc = 'lower right')
     ax2.plot(start_times, awake_times, 'lightskyblue', label='Awake Time')
-    ax2.legend(loc = 'upper right')
+    ax2.legend(loc = 'lower right')
     ax1.set_xlabel('time')
     ax1.set_ylabel('Number of Disturbances')
     ax2.set_ylabel('Sleep Time, hr')
@@ -360,10 +363,11 @@ def get_halo_session_for_date(time, sessions, adjust=False):
             item[0] = item[0] - timedelta(seconds=delta_min)
     return session_min
 
-def get_halo_data(plot=True, print=False):
+def get_halo_data(plot=True, do_print=True):
     utc_offset = ut.local_utc_offset()
     start_times = []
     durations = []
+    sleep_times = []
     awake_times = []
     intervals = []
     disturbances = []
@@ -408,20 +412,31 @@ def get_halo_data(plot=True, print=False):
             interval = (total_duration - disturbance_duration) / (disturbances_session - 1) / 3600
             start_times.append(start_time)
             # Hours
-            awake_times.append(awake_time / 3600)
             durations.append(total_duration / 3600)
+            sleep_times.append((total_duration - awake_time) / 3600)
+            awake_times.append(awake_time / 3600)
             disturbances.append(disturbances_session)
             intervals.append(interval)
             # minutes
             avg_disturbance.append(disturbance_duration / disturbances_session / 60)
         #print(f'{start_time}      {disturbances}\t{interval}\t{total_duration}  \t{disturbances_duration}')
-    if print:
-        for s in range(len(start_times)):
-            print(f'{start_times[s]}      {disturbances[s]}\t{intervals[s]}')
+    if do_print:
+        duration_avg = np.average(durations)
+        sleep_time_avg = np.average(sleep_times)
+        awake_time_avg = np.average(awake_times)
+        disturbance_avg = np.average(disturbances)
+        intervals_avg = np.average(intervals)
+        disturbance_avg_avg = np.average(avg_disturbance)
+        print(f'Average Duration: {duration_avg:.1f} hr')
+        print(f'Average Sleep Time: {sleep_time_avg:.1f} hr')
+        print(f'Average Awake Time: {awake_time_avg:.1f} hr')
+        print(f'Average Disturbances: {disturbance_avg:.1f}')
+        print(f'Average In Beteeen Interval: {intervals_avg:.1f} hr')
+        print(f'Average Disturbance Time: {disturbance_avg_avg:.1f} min')
     if plot:
-        halo_data = [start_times, durations, awake_times, disturbances, intervals, avg_disturbance]
+        halo_data = [start_times, durations, sleep_times, awake_times, disturbances, intervals, avg_disturbance]
         plot_halo_data(halo_data)
-    return start_times, durations, awake_times, disturbances, intervals, avg_disturbance
+    return start_times, durations, sleep_times, awake_times, disturbances, intervals, avg_disturbance
 
 
 def run():
