@@ -363,7 +363,7 @@ def get_halo_session_for_date(time, sessions, adjust=False):
             item[0] = item[0] - timedelta(seconds=delta_min)
     return session_min
 
-def get_halo_data(plot=True, do_print=True):
+def get_halo_data(plot=True, do_print=True, startwith = None, endwith = None):
     utc_offset = ut.local_utc_offset()
     start_times = []
     durations = []
@@ -374,6 +374,29 @@ def get_halo_data(plot=True, do_print=True):
     avg_disturbance = []
     halo_sessions = ut.read_halo_rise_file(HALO_FILE)
     n_sessions = len(halo_sessions);
+    # Get rid of empty items
+    halo_sessions1 = []
+    for n in range(len(halo_sessions)):
+        if not len(halo_sessions[n]) == 0:
+            halo_sessions1.append(halo_sessions[n])
+    halo_sessions= halo_sessions1
+    # Check for start and end
+    halo_sessions1 = []
+    for n in range(len(halo_sessions)):
+        if startwith:
+            if endwith:
+                if halo_sessions[n][0][0] >= startwith and halo_sessions[n][1][0] <= endwith:
+                    halo_sessions1.append(halo_sessions[n])
+            else:
+                if halo_sessions[n][0][0] >= startwith:
+                    halo_sessions1.append(halo_sessions[n])
+        elif endwith:
+                if halo_sessions[n][1][0] <= endwith:
+                    halo_sessions1.append(halo_sessions[n])
+        else:
+            halo_sessions1.append(halo_sessions[n])
+    halo_sessions= halo_sessions1
+    # Loop over the retained sessions
     for n in range(len(halo_sessions)):
         halo_session = halo_sessions[n]
         n_items = len(halo_session)
@@ -421,6 +444,12 @@ def get_halo_data(plot=True, do_print=True):
             avg_disturbance.append(disturbance_duration / disturbances_session / 60)
         #print(f'{start_time}      {disturbances}\t{interval}\t{total_duration}  \t{disturbances_duration}')
     if do_print:
+        if len(start_times) == 0:
+            print('No data, aborting')
+            return
+        print(f'start={start_times[-1].strftime("%Y-%m-%d")} end={start_times[0].strftime("%Y-%m-%d")}')
+        duration_avg = np.average(durations)
+        end_date = start_times[-1].strftime("%Y-%m-%d")
         duration_avg = np.average(durations)
         sleep_time_avg = np.average(sleep_times)
         awake_time_avg = np.average(awake_times)
@@ -431,7 +460,7 @@ def get_halo_data(plot=True, do_print=True):
         print(f'Average Sleep Time: {sleep_time_avg:.1f} hr')
         print(f'Average Awake Time: {awake_time_avg:.1f} hr')
         print(f'Average Disturbances: {disturbance_avg:.1f}')
-        print(f'Average In Beteeen Interval: {intervals_avg:.1f} hr')
+        print(f'Average In Between Interval: {intervals_avg:.1f} hr')
         print(f'Average Disturbance Time: {disturbance_avg_avg:.1f} min')
     if plot:
         halo_data = [start_times, durations, sleep_times, awake_times, disturbances, intervals, avg_disturbance]
@@ -450,8 +479,25 @@ def run():
     #datetime_str = '05/05/23 12:00:00'
     #read_halo_rise(datetime_str)
 
-    # Get disturbances and intervals
+    # Get all disturbances and intervals
     get_halo_data()
+
+    # Get specified disturbances and intervals
+    #print('\nTest')
+    #endwith = datetime.now();
+    #startwith = None
+    #get_halo_data(startwith=startwith, endwith=endwith)
+
+    print('\nOne month')
+    endwith = datetime.now();
+    startwith = endwith - timedelta(weeks=4)
+    get_halo_data(startwith=startwith, endwith=endwith)
+
+    # Previous month
+    print('\nPrevious month')
+    endwith = startwith
+    startwith = endwith - timedelta(weeks=4)
+    get_halo_data(startwith=startwith, endwith=endwith)
     
     ## Reads one Emay and one Event Timer file (if not canceled)
     #read_event_timer(prompt=True, do_halo_session=True, adjust=False)
